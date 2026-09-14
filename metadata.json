@@ -1,0 +1,6 @@
+{
+  "name": "Lexisense - Legal Intelligence Engine",
+  "description": "Autonomous legal intelligence and document deconstruction engine providing strict citation-locked contract auditing, plain-English translation, Document Fairness Index scoring, stress-test simulations, and attorney consultation dossiers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
