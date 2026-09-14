@@ -80,7 +80,12 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
   const charCount = inputText.length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
+    <div 
+      role="dialog" 
+      aria-modal="true" 
+      aria-labelledby="doc-modal-title"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn"
+    >
       <div 
         className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
         onDragOver={handleDragOver}
@@ -89,11 +94,11 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400" aria-hidden="true">
               <Scale className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white font-['Cinzel',serif]">
+              <h2 id="doc-modal-title" className="text-base font-bold text-white font-['Cinzel',serif]">
                 Ingest Contract into Lexisense
               </h2>
               <p className="text-xs text-slate-400">
@@ -104,36 +109,41 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition cursor-pointer"
+            aria-label="Close dialog"
+            className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:outline-none"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
         {/* Tab Selection */}
-        <div className="flex border-b border-slate-800 bg-slate-950/40 px-6 pt-2">
+        <div role="tablist" aria-label="Document Ingestion Mode" className="flex border-b border-slate-800 bg-slate-950/40 px-6 pt-2">
           <button
             type="button"
+            role="tab"
+            aria-selected={activeTab === 'custom'}
             onClick={() => setActiveTab('custom')}
-            className={`pb-3 px-4 text-xs font-semibold border-b-2 transition cursor-pointer flex items-center gap-2 ${
+            className={`pb-3 px-4 text-xs font-semibold border-b-2 transition cursor-pointer flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:outline-none ${
               activeTab === 'custom'
                 ? 'border-amber-500 text-amber-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <FileText className="w-3.5 h-3.5" />
+            <FileText className="w-3.5 h-3.5" aria-hidden="true" />
             Paste / Upload Contract
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={activeTab === 'samples'}
             onClick={() => setActiveTab('samples')}
-            className={`pb-3 px-4 text-xs font-semibold border-b-2 transition cursor-pointer flex items-center gap-2 ${
+            className={`pb-3 px-4 text-xs font-semibold border-b-2 transition cursor-pointer flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:outline-none ${
               activeTab === 'samples'
                 ? 'border-amber-500 text-amber-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <BookOpen className="w-3.5 h-3.5" />
+            <BookOpen className="w-3.5 h-3.5" aria-hidden="true" />
             Pre-Loaded Benchmark Contracts ({SAMPLE_CONTRACTS.length})
           </button>
         </div>
@@ -141,8 +151,8 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto flex-1 space-y-4">
           {error && (
-            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+            <div role="alert" className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" aria-hidden="true" />
               <span>{error}</span>
             </div>
           )}
@@ -151,26 +161,28 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  <label htmlFor="doc-title-input" className="block text-xs font-semibold text-slate-300 mb-1">
                     Document Title / Reference Name
                   </label>
                   <input
+                    id="doc-title-input"
                     type="text"
                     placeholder="e.g., Master Services Agreement v3"
                     value={docTitle}
                     onChange={e => setDocTitle(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500/60"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/40"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  <label htmlFor="perspective-select" className="block text-xs font-semibold text-slate-300 mb-1">
                     Reviewing Perspective
                   </label>
                   <select
+                    id="perspective-select"
                     value={perspective}
                     onChange={e => setPerspective(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500/60 cursor-pointer"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/40 cursor-pointer"
                   >
                     <option value="Customer / Buyer Protection">Protect Customer / Buyer / Client</option>
                     <option value="Vendor / Service Provider Protection">Protect Vendor / Service Provider</option>
@@ -184,7 +196,7 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
               {/* Text Input Area & Drag/Drop */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between text-xs text-slate-400">
-                  <label className="font-semibold text-slate-300">
+                  <label htmlFor="contract-source-textarea" className="font-semibold text-slate-300">
                     Source Contract Clauses (Verbatim Legal Text)
                   </label>
                   <span>
@@ -198,7 +210,7 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
                   value={inputText}
                   onChange={e => setInputText(e.target.value)}
                   placeholder={`Paste contract text or clauses here...\n\nExample:\nSECTION 8. LIMITATION OF LIABILITY\n8.1 Vendor's total liability shall be limited to $100...\n\nSECTION 11. INDEMNIFICATION\nCustomer shall indemnify Vendor for all claims including attorney fees...`}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs text-slate-200 placeholder-slate-600 font-mono leading-relaxed focus:outline-none focus:border-amber-500/60"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs text-slate-200 placeholder-slate-600 font-mono leading-relaxed focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/40"
                   required
                 />
               </div>

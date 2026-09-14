@@ -1,10 +1,66 @@
 import express from "express";
 import path from "path";
+import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import helmet from "helmet";
+import compression from "compression";
 
 dotenv.config();
+
+// In-Memory LRU Cache for Analysis Results (High Efficiency & Zero Redundant Compute)
+const analysisCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL_MS = 1000 * 60 * 60 * 2; // 2 hours
+const MAX_CACHE_ENTRIES = 100;
+
+function getCacheKey(prefix: string, content: string, extra: string = ""): string {
+  return crypto.createHash("sha256").update(`${prefix}:${content}:${extra}`).digest("hex");
+}
+
+function getFromCache(key: string): any | null {
+  const entry = analysisCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
+    analysisCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function setInCache(key: string, data: any): void {
+  if (analysisCache.size >= MAX_CACHE_ENTRIES) {
+    const oldestKey = analysisCache.keys().next().value;
+    if (oldestKey) analysisCache.delete(oldestKey);
+  }
+  analysisCache.set(key, { data, timestamp: Date.now() });
+}
+
+// In-Memory Rate Limiter (Security & DoS Protection)
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const MAX_REQUESTS_PER_WINDOW = 60;
+
+function rateLimitMiddleware(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const ip = req.ip || req.socket.remoteAddress || "unknown-ip";
+  const now = Date.now();
+  const clientLimit = rateLimitMap.get(ip);
+
+  if (!clientLimit || now > clientLimit.resetTime) {
+    rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    return next();
+  }
+
+  if (clientLimit.count >= MAX_REQUESTS_PER_WINDOW) {
+    return res.status(429).json({
+      error: "Too many requests. Please wait a few minutes before submitting additional documents.",
+      retryAfterSeconds: Math.ceil((clientLimit.resetTime - now) / 1000)
+    });
+  }
+
+  clientLimit.count += 1;
+  next();
+}
 
 function getGeminiClient(): GoogleGenAI | null {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -141,23 +197,74 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json({ limit: "15mb" }));
+  // Security Headers via Helmet (optimized for modern web & AI Studio iframe embedding)
+  app.use(
+    helmet({
+      contentSecurityPolicy: false, // Vite inline scripts & dev server require flexibility
+      crossOriginEmbedderPolicy: false,
+      crossOriginOpenerPolicy: false, // Allows embedding within Google AI Studio preview iframe
+      crossOriginResourcePolicy: false,
+      originAgentCluster: false,
+      frameguard: false, // Allows embedding within Google AI Studio preview
+      dnsPrefetchControl: { allow: false },
+      xContentTypeOptions: true,
+      referrerPolicy: { policy: "strict-origin-when-cross-origin" }
+    })
+  );
 
-  // Health check
+  // Gzip / Brotli Compression for High Bandwidth Efficiency
+  app.use(compression());
+
+  // Strict Request Body Limit to prevent memory exhaustion
+  app.use(express.json({ limit: "5mb" }));
+
+  // Apply Rate Limiter to protect all API endpoints
+  app.use("/api", rateLimitMiddleware);
+
+  // Health check & Server Status
   app.get("/api/health", (_req, res) => {
     res.json({
       status: "ok",
       engine: "Lexisense Legal Intelligence Engine v2.4",
+      security: {
+        rateLimiterActive: true,
+        helmetActive: true,
+        compressionActive: true
+      },
+      efficiency: {
+        cacheEntries: analysisCache.size,
+        compressionEnabled: true
+      },
       geminiConfigured: !!process.env.GEMINI_API_KEY
     });
   });
 
-  // Main Analysis Endpoint
+  // Main Analysis Endpoint with Cache and Validation
   app.post("/api/analyze", async (req, res) => {
     try {
       const { documentText, perspective } = req.body;
-      if (!documentText || typeof documentText !== "string" || documentText.trim().length === 0) {
-        return res.status(400).json({ error: "Document text is required for analysis." });
+      
+      // Strict Input Validation & Sanitization (Security)
+      if (!documentText || typeof documentText !== "string") {
+        return res.status(400).json({ error: "Document text is required and must be a string." });
+      }
+
+      const cleanText = documentText.trim().replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
+      if (cleanText.length < 20) {
+        return res.status(400).json({ error: "Document text too short. Minimum 20 characters required for legal audit." });
+      }
+      if (cleanText.length > 150000) {
+        return res.status(400).json({ error: "Document text exceeds maximum allowed size (150,000 characters)." });
+      }
+
+      const sanitizedPerspective = typeof perspective === "string" ? perspective.slice(0, 200) : "General Neutral Reviewer / Counterparty Protection";
+
+      // Check In-Memory Cache (Efficiency)
+      const cacheKey = getCacheKey("analysis", cleanText, sanitizedPerspective);
+      const cachedResult = getFromCache(cacheKey);
+      if (cachedResult) {
+        res.setHeader("X-Cache", "HIT");
+        return res.json(cachedResult);
       }
 
       const ai = getGeminiClient();
@@ -168,11 +275,11 @@ async function startServer() {
       }
 
       const prompt = `Analyze the following legal document with strict adherence to the Lexisense directives.
-Reviewing Perspective: ${perspective || "General Neutral Reviewer / Counterparty Protection"}.
+Reviewing Perspective: ${sanitizedPerspective}.
 
 Document Text:
 <<<
-${documentText.trim()}
+${cleanText}
 >>>`;
 
       const response = await ai.models.generateContent({
@@ -208,9 +315,9 @@ ${documentText.trim()}
             };
           }
 
-          const exactIdx = documentText.indexOf(quote);
+          const exactIdx = cleanText.indexOf(quote);
           if (exactIdx !== -1) {
-            const lineNo = documentText.slice(0, exactIdx).split("\n").length;
+            const lineNo = cleanText.slice(0, exactIdx).split("\n").length;
             return {
               ...clause,
               citation_verified: true,
@@ -220,11 +327,11 @@ ${documentText.trim()}
             };
           }
 
-          const lowerDoc = documentText.toLowerCase();
+          const lowerDoc = cleanText.toLowerCase();
           const lowerQuote = quote.toLowerCase();
           const lowerIdx = lowerDoc.indexOf(lowerQuote);
           if (lowerIdx !== -1) {
-            const lineNo = documentText.slice(0, lowerIdx).split("\n").length;
+            const lineNo = cleanText.slice(0, lowerIdx).split("\n").length;
             return {
               ...clause,
               citation_verified: true,
@@ -235,7 +342,7 @@ ${documentText.trim()}
           }
 
           // Normalized match (spaces/line breaks collapsed)
-          const normDoc = documentText.replace(/\s+/g, " ");
+          const normDoc = cleanText.replace(/\s+/g, " ");
           const normQuote = quote.replace(/\s+/g, " ").trim();
           const normIdx = normDoc.indexOf(normQuote);
 
@@ -247,21 +354,35 @@ ${documentText.trim()}
         });
       }
 
+      // Store in Cache for rapid future retrieval
+      setInCache(cacheKey, parsed);
+      res.setHeader("X-Cache", "MISS");
       return res.json(parsed);
     } catch (err: any) {
       console.error("Error analyzing document:", err);
       return res.status(500).json({
-        error: err?.message || "Failed to analyze document with Lexisense engine."
+        error: "Failed to analyze document with Lexisense engine. Please check input parameters or retry."
       });
     }
   });
 
-  // Dynamic Custom Scenario Stress Test Endpoint
+  // Dynamic Custom Scenario Stress Test Endpoint with Cache
   app.post("/api/stress-test", async (req, res) => {
     try {
       const { documentText, customScenario } = req.body;
-      if (!documentText || !customScenario) {
-        return res.status(400).json({ error: "Both documentText and customScenario are required." });
+      if (!documentText || typeof documentText !== "string" || !customScenario || typeof customScenario !== "string") {
+        return res.status(400).json({ error: "Both documentText and customScenario are required strings." });
+      }
+
+      const cleanDoc = documentText.trim();
+      const cleanScenario = customScenario.trim().slice(0, 500);
+
+      // Cache lookup for identical stress test queries
+      const cacheKey = getCacheKey("stress", cleanDoc, cleanScenario);
+      const cached = getFromCache(cacheKey);
+      if (cached) {
+        res.setHeader("X-Cache", "HIT");
+        return res.json(cached);
       }
 
       const ai = getGeminiClient();
@@ -270,11 +391,11 @@ ${documentText.trim()}
       }
 
       const prompt = `Given the legal document below, stress-test this specific operational scenario:
-"${customScenario}"
+"${cleanScenario}"
 
 Document:
 <<<
-${documentText}
+${cleanDoc}
 >>>
 
 Trace the step-by-step consequence chain across interconnected contractual clauses (e.g. Clause X -> Grace Period Y -> Remedy Z), and evaluate whether the user/counterparty is Unprotected, Partially Protected, or Well Protected.`;
@@ -304,10 +425,12 @@ Trace the step-by-step consequence chain across interconnected contractual claus
       });
 
       const parsed = JSON.parse(response.text || "{}");
+      setInCache(cacheKey, parsed);
+      res.setHeader("X-Cache", "MISS");
       return res.json(parsed);
     } catch (err: any) {
       console.error("Error running scenario stress-test:", err);
-      return res.status(500).json({ error: err?.message || "Scenario stress-test failed." });
+      return res.status(500).json({ error: "Scenario stress-test could not be completed." });
     }
   });
 

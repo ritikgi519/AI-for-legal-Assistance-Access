@@ -85,11 +85,12 @@ export const ClauseAuditList: React.FC<ClauseAuditListProps> = ({
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
         {/* Search */}
         <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
           <input
             id="clause-search-input"
             type="text"
             placeholder="Search clauses, citations, redlines, keywords..."
+            aria-label="Search clauses, citations, redlines, keywords"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500/60"
@@ -100,9 +101,10 @@ export const ClauseAuditList: React.FC<ClauseAuditListProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           {/* Category Filter */}
           <div className="flex items-center gap-1">
-            <Filter className="w-3.5 h-3.5 text-slate-400" />
+            <Filter className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
             <select
               id="clause-category-select"
+              aria-label="Filter by clause category"
               value={selectedCategory}
               onChange={e => setSelectedCategory(e.target.value)}
               className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-amber-500/60 cursor-pointer"
@@ -118,6 +120,7 @@ export const ClauseAuditList: React.FC<ClauseAuditListProps> = ({
           {/* Risk Filter */}
           <select
             id="clause-risk-select"
+            aria-label="Filter by risk tier"
             value={selectedRisk}
             onChange={e => setSelectedRisk(e.target.value)}
             className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-amber-500/60 cursor-pointer"
@@ -139,13 +142,13 @@ export const ClauseAuditList: React.FC<ClauseAuditListProps> = ({
       <div className="space-y-5">
         {filteredClauses.length === 0 ? (
           <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-8 text-center text-slate-400">
-            <ShieldAlert className="w-8 h-8 text-slate-500 mx-auto mb-2" />
+            <ShieldAlert className="w-8 h-8 text-slate-500 mx-auto mb-2" aria-hidden="true" />
             <p className="text-sm">No clauses found matching your filter criteria.</p>
           </div>
         ) : (
           filteredClauses.map((clause, idx) => {
             const riskConfig = getRiskBadge(clause.risk_level);
-            const isOmission = clause.verbatim_quote.includes('[OMISSION DETECTED]');
+            const isOmission = clause.verbatim_quote.includes('OMISSION DETECTED') || clause.plain_english_meaning.includes('OMISSION DETECTED');
             const matchInfo = documentText ? verifyCitation(documentText, clause.verbatim_quote) : null;
 
             return (

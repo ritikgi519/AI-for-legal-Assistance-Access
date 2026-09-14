@@ -199,9 +199,9 @@ SECTION 9. TERMINATION
           proposed_redline: "Contractor assigns to Company all right, title, and interest solely in custom Deliverables created specifically for Company pursuant to an authorized Statement of Work. Contractor retains all rights in pre-existing intellectual property, tools, and background technology."
         },
         {
-          clause_id: "Section 7.1 & 7.2",
+          clause_id: "Section 7.1",
           clause_category: "Non-Compete",
-          verbatim_quote: "Contractor shall not directly or indirectly provide consulting, software development, advisory, or technical services to any business operating in the technology sector within a one hundred (100) mile radius... Contractor shall pay Company liquidated damages of $50,000 per violation...",
+          verbatim_quote: "Contractor shall not directly or indirectly provide consulting, software development, advisory, or technical services to any business operating in the technology sector within a one hundred (100) mile radius of any Company office.",
           plain_english_meaning: "You are legally banned from writing software or taking any freelance client in the entire tech industry for 2 full years after leaving, and they will fine you $50,000 if you do.",
           risk_level: "CRITICAL",
           party_favored: "Company",
@@ -213,9 +213,9 @@ SECTION 9. TERMINATION
           proposed_redline: "Delete Section 7 entirely, or replace with: Contractor agrees not to solicit Company's existing active clients for a period of six (6) months following termination of this Agreement."
         },
         {
-          clause_id: "Section 2.1 & 2.2",
+          clause_id: "Section 2.1",
           clause_category: "Payment",
-          verbatim_quote: "Company shall remit payment for approved invoices within ninety (90) days of receipt ('Net 90')... Any invoice submitted after seven days shall be deemed permanently waived and forfeited... Company reserves the right to withhold up to 100% of payment if Company, in its sole and absolute discretion, deems the Deliverables unsatisfactory.",
+          verbatim_quote: "Company shall remit payment for approved invoices within ninety (90) days of receipt (\"Net 90\"). Invoices must be submitted within seven (7) days of milestone completion. Any invoice submitted after seven days shall be deemed permanently waived and forfeited by Contractor.",
           plain_english_meaning: "You must wait 3 full months to get paid, missing an invoice by one day means you get $0, and the client can unilaterally decide they don't like the work and keep all your code without paying a dime.",
           risk_level: "HIGH",
           party_favored: "Company",
@@ -323,9 +323,9 @@ SECTION 13. DEFAULT AND ACCELERATED RENT
           proposed_redline: "In the event of a monetary default, Landlord shall provide Tenant written notice and a fifteen (15) day cure window. If uncured, Landlord may terminate the lease, subject to Landlord's statutory obligation to make commercially reasonable efforts to mitigate damages by re-letting the premises."
         },
         {
-          clause_id: "Section 4.1 & 4.2",
+          clause_id: "Section 4.1",
           clause_category: "Payment",
-          verbatim_quote: "Operating Costs shall explicitly include, without amortization, all capital improvements, structural roof replacements, HVAC overhaul, seismic retrofitting... [OMISSION DETECTED: No audit rights provided for Tenant to inspect or challenge Landlord's CAM invoices.]",
+          verbatim_quote: "Operating Costs shall explicitly include, without amortization, all capital improvements, structural roof replacements, HVAC overhaul, seismic retrofitting, and Landlord's executive administrative overhead.",
           plain_english_meaning: "The landlord can force you to pay upfront for replacing the entire building roof or upgrading structural foundations in a single month, and you aren't legally allowed to see the receipts.",
           risk_level: "CRITICAL",
           party_favored: "Landlord",
@@ -339,7 +339,7 @@ SECTION 13. DEFAULT AND ACCELERATED RENT
         {
           clause_id: "Section 9.1",
           clause_category: "Indemnity",
-          verbatim_quote: "Tenant shall defend, indemnify, and hold Landlord harmless against any damage, injury, death, loss... including any injury or damage resulting from Landlord's or Landlord's contractors' active negligence.",
+          verbatim_quote: "Tenant shall defend, indemnify, and hold Landlord harmless against any damage, injury, death, loss, or litigation occurring in, on, or about the Leased Premises, including any injury or damage resulting from Landlord's or Landlord's contractors' active negligence.",
           plain_english_meaning: "If the landlord's worker drops a hammer on a customer's head or causes an electrical fire through carelessness, you have to pay the victim's hospital bills and defend the landlord in court.",
           risk_level: "HIGH",
           party_favored: "Landlord",

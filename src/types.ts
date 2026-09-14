@@ -39,6 +39,7 @@ export interface CriticalClauseAudit {
   party_favored: string; // e.g. "Vendor", "Client", "Mutual"
   hidden_pitfalls: string[];
   proposed_redline: string;
+  renegotiation_priority?: number;
   citation_verified?: boolean;
   match_confidence?: number; // 0 to 100%
   match_offset?: number;

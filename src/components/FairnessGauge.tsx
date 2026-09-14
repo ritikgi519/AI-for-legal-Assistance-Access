@@ -53,8 +53,8 @@ export const FairnessGauge: React.FC<FairnessGaugeProps> = ({ overview, clauses 
   const criticalCount = clauses.filter(c => c.risk_level === 'CRITICAL').length;
   const highCount = clauses.filter(c => c.risk_level === 'HIGH').length;
   const omissionCount = clauses.filter(c => 
-    c.verbatim_quote.includes('[OMISSION DETECTED]') || 
-    c.plain_english_meaning.includes('[OMISSION DETECTED]')
+    c.verbatim_quote.includes('OMISSION DETECTED') || 
+    c.plain_english_meaning.includes('OMISSION DETECTED')
   ).length;
 
   // Party favor reciprocity breakdown
@@ -150,12 +150,15 @@ export const FairnessGauge: React.FC<FairnessGaugeProps> = ({ overview, clauses 
 
           {/* Scoring Ledger Toggle Button */}
           <button
+            id="btn-dfi-ledger-toggle"
             onClick={() => setShowLedger(!showLedger)}
+            aria-expanded={showLedger}
+            aria-controls="dfi-ledger-panel"
             className="mt-3 text-xs text-amber-400/90 hover:text-amber-300 flex items-center gap-1.5 font-medium transition cursor-pointer"
           >
-            <Calculator className="w-3.5 h-3.5" />
+            <Calculator className="w-3.5 h-3.5" aria-hidden="true" />
             <span>{showLedger ? 'Hide Calculation Ledger' : 'View DFI Scoring Ledger'}</span>
-            {showLedger ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            {showLedger ? <ChevronUp className="w-3 h-3" aria-hidden="true" /> : <ChevronDown className="w-3 h-3" aria-hidden="true" />}
           </button>
         </div>
 
@@ -235,7 +238,7 @@ export const FairnessGauge: React.FC<FairnessGaugeProps> = ({ overview, clauses 
 
       {/* Expandable Mathematical DFI Scoring Ledger */}
       {showLedger && (
-        <div className="pt-4 border-t border-slate-800 animate-fadeIn space-y-3">
+        <div id="dfi-ledger-panel" className="pt-4 border-t border-slate-800 animate-fadeIn space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Calculator className="w-4 h-4 text-amber-400" />

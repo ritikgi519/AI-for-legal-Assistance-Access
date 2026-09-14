@@ -3,6 +3,48 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#020617" />
+    <script>
+      // Guard against environments where window.fetch has only a getter
+      (function() {
+        try {
+          var nativeFetch = window.fetch;
+          var activeFetch = nativeFetch ? function() { return nativeFetch.apply(window, arguments); } : null;
+          Object.defineProperty(window, 'fetch', {
+            get: function() {
+              return activeFetch;
+            },
+            set: function(fn) {
+              activeFetch = fn;
+            },
+            configurable: true,
+            enumerable: true
+          });
+        } catch (e) {
+          try {
+            if (typeof Window !== 'undefined' && Window.prototype) {
+              var desc = Object.getOwnPropertyDescriptor(Window.prototype, 'fetch');
+              if (desc && !desc.set) {
+                var protoFetch = desc.get ? desc.get.call(window) : window.fetch;
+                Object.defineProperty(Window.prototype, 'fetch', {
+                  get: desc.get || function() { return protoFetch; },
+                  set: function(fn) {
+                    Object.defineProperty(this, 'fetch', {
+                      value: fn,
+                      writable: true,
+                      configurable: true,
+                      enumerable: true
+                    });
+                  },
+                  configurable: true,
+                  enumerable: true
+                });
+              }
+            }
+          } catch (e2) {}
+        }
+      })();
+    </script>
     <title>Lexisense - Legal Intelligence Engine</title>
     <meta name="description" content="Autonomous legal intelligence and document deconstruction engine providing strict citation-locked contract auditing, plain-English translation, Document Fairness Index scoring, stress-test simulations, and attorney consultation dossiers." />
     <meta property="og:title" content="Lexisense - Legal Intelligence Engine" />

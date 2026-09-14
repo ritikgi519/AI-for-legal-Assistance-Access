@@ -21,7 +21,7 @@ function normalizeText(text: string): string {
  * Verifies if verbatim quote exists in the source contract and finds its exact line and character boundaries
  */
 export function verifyCitation(documentText: string, quote: string): CitationMatchResult {
-  if (!quote || quote.includes('[OMISSION DETECTED]')) {
+  if (!quote || quote.includes('OMISSION DETECTED')) {
     return {
       isOmission: true,
       isVerified: false,
@@ -108,7 +108,7 @@ export function computeDFIBreakdown(clauses: CriticalClauseAudit[]): DFIDeductio
   clauses.forEach(clause => {
     const isCritical = clause.risk_level === 'CRITICAL';
     const isHigh = clause.risk_level === 'HIGH';
-    const isOmission = clause.verbatim_quote.includes('[OMISSION DETECTED]');
+    const isOmission = clause.verbatim_quote.includes('OMISSION DETECTED');
 
     let impact = 0;
     let status: DFIDeduction['status'] = 'Balanced Reciprocal';

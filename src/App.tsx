@@ -123,6 +123,19 @@ ${analysis.statutory_disclaimer}
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+      {/* Accessible Skip Link */}
+      <a 
+        href="#main-content" 
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2 focus:bg-amber-500 focus:text-slate-950 focus:font-bold focus:rounded-lg focus:shadow-xl focus:ring-2 focus:ring-amber-300 focus:outline-none"
+      >
+        Skip to main content
+      </a>
+
+      {/* Screen Reader Status Announcement */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {isAnalyzing ? 'Analyzing document...' : `Loaded document: ${currentDocTitle}. Active tab: ${activeTab}.`}
+      </div>
+
       {/* Top Navigation */}
       <Header
         onOpenNewAnalysis={() => setIsDocModalOpen(true)}
@@ -135,18 +148,20 @@ ${analysis.statutory_disclaimer}
       />
 
       {/* Benchmark Selector Bar */}
-      <div className="bg-slate-900/60 border-b border-slate-800 px-4 sm:px-6 lg:px-8 py-2.5">
+      <nav aria-label="Benchmark Documents" className="bg-slate-900/60 border-b border-slate-800 px-4 sm:px-6 lg:px-8 py-2.5">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-          <div className="flex items-center gap-2 overflow-x-auto py-1 scrollbar-none">
+          <div role="group" aria-label="Sample Contracts" className="flex items-center gap-2 overflow-x-auto py-1 scrollbar-none">
             <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider shrink-0 flex items-center gap-1">
-              <Layers className="w-3.5 h-3.5 text-amber-400" />
+              <Layers className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />
               Benchmarks:
             </span>
             {SAMPLE_CONTRACTS.map(sample => (
               <button
                 key={sample.id}
                 onClick={() => handleSelectSample(sample)}
-                className={`text-xs px-3 py-1 rounded-full whitespace-nowrap font-medium transition cursor-pointer shrink-0 border ${
+                aria-pressed={selectedSampleId === sample.id}
+                aria-label={`Load benchmark contract: ${sample.title}`}
+                className={`text-xs px-3 py-1 rounded-full whitespace-nowrap font-medium transition cursor-pointer shrink-0 border focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:outline-none ${
                   selectedSampleId === sample.id
                     ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm'
                     : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border-slate-700'
@@ -160,17 +175,18 @@ ${analysis.statutory_disclaimer}
           <div className="flex items-center gap-3 shrink-0 self-end sm:self-auto">
             <button
               onClick={() => setIsSourceModalOpen(true)}
-              className="text-xs text-slate-400 hover:text-amber-300 flex items-center gap-1.5 transition cursor-pointer"
+              aria-label="View raw source instrument text"
+              className="text-xs text-slate-400 hover:text-amber-300 flex items-center gap-1.5 transition cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:outline-none rounded px-1.5 py-0.5"
             >
-              <FileText className="w-3.5 h-3.5 text-amber-400" />
+              <FileText className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />
               <span>View Source Text</span>
             </button>
           </div>
         </div>
-      </div>
+      </nav>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      <main id="main-content" tabIndex={-1} className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 focus:outline-none">
         {analysis ? (
           <>
             {/* 1. Document Overview & Document Fairness Index Gauge */}
@@ -181,33 +197,39 @@ ${analysis.statutory_disclaimer}
 
             {/* 2. Interactive Navigation Tabs */}
             <div className="border-b border-slate-800 flex items-center justify-between flex-wrap gap-2">
-              <nav className="flex space-x-1 sm:space-x-4">
+              <nav role="tablist" aria-label="Contract Analysis Modules" className="flex space-x-1 sm:space-x-4">
                 <button
                   id="tab-split"
+                  role="tab"
+                  aria-selected={activeTab === 'split'}
+                  aria-controls="panel-split"
                   onClick={() => setActiveTab('split')}
-                  className={`py-3 px-3 text-xs sm:text-sm font-semibold border-b-2 flex items-center gap-2 transition cursor-pointer ${
+                  className={`py-3 px-3 text-xs sm:text-sm font-semibold border-b-2 flex items-center gap-2 transition cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:outline-none ${
                     activeTab === 'split'
                       ? 'border-amber-500 text-amber-400'
                       : 'border-transparent text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <Split className="w-4 h-4 text-amber-400" />
+                  <Split className="w-4 h-4 text-amber-400" aria-hidden="true" />
                   <span>Dual-Pane Citation Inspector</span>
-                  <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800/60">
+                  <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800/60 font-mono">
                     Ground Truth
                   </span>
                 </button>
 
                 <button
                   id="tab-clauses"
+                  role="tab"
+                  aria-selected={activeTab === 'clauses'}
+                  aria-controls="panel-clauses"
                   onClick={() => setActiveTab('clauses')}
-                  className={`py-3 px-3 text-xs sm:text-sm font-semibold border-b-2 flex items-center gap-2 transition cursor-pointer ${
+                  className={`py-3 px-3 text-xs sm:text-sm font-semibold border-b-2 flex items-center gap-2 transition cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:outline-none ${
                     activeTab === 'clauses'
                       ? 'border-amber-500 text-amber-400'
                       : 'border-transparent text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <FileCheck className="w-4 h-4" />
+                  <FileCheck className="w-4 h-4" aria-hidden="true" />
                   <span>Clause Audit Cards</span>
                   <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-slate-300">
                     {analysis.critical_clause_audit.length}
@@ -216,14 +238,17 @@ ${analysis.statutory_disclaimer}
 
                 <button
                   id="tab-stress"
+                  role="tab"
+                  aria-selected={activeTab === 'stress'}
+                  aria-controls="panel-stress"
                   onClick={() => setActiveTab('stress')}
-                  className={`py-3 px-3 text-xs sm:text-sm font-semibold border-b-2 flex items-center gap-2 transition cursor-pointer ${
+                  className={`py-3 px-3 text-xs sm:text-sm font-semibold border-b-2 flex items-center gap-2 transition cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:outline-none ${
                     activeTab === 'stress'
                       ? 'border-amber-500 text-amber-400'
                       : 'border-transparent text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <Zap className="w-4 h-4 text-amber-400" />
+                  <Zap className="w-4 h-4 text-amber-400" aria-hidden="true" />
                   <span>"What-If" Stress-Tests</span>
                   <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-slate-300">
                     {analysis.what_if_stress_tests.length}
@@ -232,14 +257,17 @@ ${analysis.statutory_disclaimer}
 
                 <button
                   id="tab-dossier"
+                  role="tab"
+                  aria-selected={activeTab === 'dossier'}
+                  aria-controls="panel-dossier"
                   onClick={() => setActiveTab('dossier')}
-                  className={`py-3 px-3 text-xs sm:text-sm font-semibold border-b-2 flex items-center gap-2 transition cursor-pointer ${
+                  className={`py-3 px-3 text-xs sm:text-sm font-semibold border-b-2 flex items-center gap-2 transition cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:outline-none ${
                     activeTab === 'dossier'
                       ? 'border-amber-500 text-amber-400'
                       : 'border-transparent text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <Briefcase className="w-4 h-4 text-indigo-400" />
+                  <Briefcase className="w-4 h-4 text-indigo-400" aria-hidden="true" />
                   <span>Attorney Dossier</span>
                   <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-950/80 text-indigo-300 border border-indigo-800/60">
                     High Leverage
@@ -249,52 +277,60 @@ ${analysis.statutory_disclaimer}
 
               <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400">
                 <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400/90 font-mono">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
                   100% Verbatim Ground Truth Active
                 </span>
               </div>
             </div>
 
             {/* Tab Views */}
-            <div>
+            <div className="focus:outline-none">
               {activeTab === 'split' && (
-                <SplitViewAuditor
-                  documentText={currentDocumentText}
-                  clauses={analysis.critical_clause_audit}
-                />
+                <section role="tabpanel" id="panel-split" aria-labelledby="tab-split" tabIndex={0} className="focus:outline-none">
+                  <SplitViewAuditor
+                    documentText={currentDocumentText}
+                    clauses={analysis.critical_clause_audit}
+                  />
+                </section>
               )}
 
               {activeTab === 'clauses' && (
-                <ClauseAuditList
-                  clauses={analysis.critical_clause_audit}
-                  documentText={currentDocumentText}
-                  onLocateInSource={(clauseId) => {
-                    setActiveTab('split');
-                  }}
-                />
+                <section role="tabpanel" id="panel-clauses" aria-labelledby="tab-clauses" tabIndex={0} className="focus:outline-none">
+                  <ClauseAuditList
+                    clauses={analysis.critical_clause_audit}
+                    documentText={currentDocumentText}
+                    onLocateInSource={(_clauseId) => {
+                      setActiveTab('split');
+                    }}
+                  />
+                </section>
               )}
 
               {activeTab === 'stress' && (
-                <WhatIfSimulator
-                  tests={analysis.what_if_stress_tests}
-                  documentText={currentDocumentText}
-                />
+                <section role="tabpanel" id="panel-stress" aria-labelledby="tab-stress" tabIndex={0} className="focus:outline-none">
+                  <WhatIfSimulator
+                    tests={analysis.what_if_stress_tests}
+                    documentText={currentDocumentText}
+                  />
+                </section>
               )}
 
               {activeTab === 'dossier' && (
-                <AttorneyDossier
-                  dossier={analysis.lawyer_consultation_dossier}
-                  docTitle={analysis.document_overview.document_title}
-                  fairnessIndex={analysis.document_overview.fairness_index}
-                  disclaimer={analysis.statutory_disclaimer}
-                />
+                <section role="tabpanel" id="panel-dossier" aria-labelledby="tab-dossier" tabIndex={0} className="focus:outline-none">
+                  <AttorneyDossier
+                    dossier={analysis.lawyer_consultation_dossier}
+                    docTitle={analysis.document_overview.document_title}
+                    fairnessIndex={analysis.document_overview.fairness_index}
+                    disclaimer={analysis.statutory_disclaimer}
+                  />
+                </section>
               )}
             </div>
           </>
         ) : (
           /* Empty State when no document loaded */
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center max-w-2xl mx-auto space-y-6">
-            <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mx-auto">
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mx-auto" aria-hidden="true">
               <Scale className="w-8 h-8" />
             </div>
             <div className="space-y-2">
@@ -307,7 +343,7 @@ ${analysis.statutory_disclaimer}
             </div>
             <button
               onClick={() => setIsDocModalOpen(true)}
-              className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-sm font-bold shadow-md transition cursor-pointer"
+              className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-sm font-bold shadow-md transition cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:outline-none"
             >
               Analyze Contract Now
             </button>
@@ -316,10 +352,10 @@ ${analysis.statutory_disclaimer}
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-800/80 bg-slate-950 py-4 px-4 sm:px-6 lg:px-8 text-center text-xs text-slate-400">
+      <footer role="contentinfo" className="border-t border-slate-800/80 bg-slate-950 py-4 px-4 sm:px-6 lg:px-8 text-center text-xs text-slate-400">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Scale className="w-3.5 h-3.5 text-amber-400" />
+            <Scale className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />
             <span className="font-semibold text-slate-300">Lexisense Legal Intelligence & Document Deconstruction</span>
           </div>
           <p className="text-[11px] text-slate-400">
