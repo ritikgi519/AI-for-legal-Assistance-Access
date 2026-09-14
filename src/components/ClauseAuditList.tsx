@@ -1,30 +1,38 @@
 import React, { useState } from 'react';
 import { CriticalClauseAudit, RiskLevel } from '../types';
+import { verifyCitation } from '../utils/citationMatcher';
+import { RedlineDiffViewer } from './RedlineDiffViewer';
 import { 
   ShieldAlert, 
   Quote, 
   Copy, 
   Check, 
   AlertTriangle, 
-  ArrowRight, 
   Scale, 
   HelpCircle,
   FileEdit,
   Filter,
   Search,
-  CheckCircle2
+  CheckCircle2,
+  Crosshair,
+  ShieldCheck,
+  Sparkles
 } from 'lucide-react';
 
 interface ClauseAuditListProps {
   clauses: CriticalClauseAudit[];
+  documentText?: string;
+  onLocateInSource?: (clauseId: string) => void;
 }
 
-export const ClauseAuditList: React.FC<ClauseAuditListProps> = ({ clauses }) => {
+export const ClauseAuditList: React.FC<ClauseAuditListProps> = ({ 
+  clauses, 
+  documentText = '',
+  onLocateInSource 
+}) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedRisk, setSelectedRisk] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Extract unique categories
   const categories = ['ALL', ...Array.from(new Set(clauses.map(c => c.clause_category)))];
@@ -41,12 +49,6 @@ export const ClauseAuditList: React.FC<ClauseAuditListProps> = ({ clauses }) => 
 
     return matchesCategory && matchesRisk && matchesSearch;
   });
-
-  const handleCopyRedline = (redline: string, index: number) => {
-    navigator.clipboard.writeText(redline);
-    setCopiedIndex(index);
-    setTimeout(() => setCopiedIndex(null), 2000);
-  };
 
   const getRiskBadge = (level: RiskLevel) => {
     switch (level) {
@@ -144,7 +146,7 @@ export const ClauseAuditList: React.FC<ClauseAuditListProps> = ({ clauses }) => 
           filteredClauses.map((clause, idx) => {
             const riskConfig = getRiskBadge(clause.risk_level);
             const isOmission = clause.verbatim_quote.includes('[OMISSION DETECTED]');
-            const isExpanded = expandedId === clause.clause_id || expandedId === null;
+            const matchInfo = documentText ? verifyCitation(documentText, clause.verbatim_quote) : null;
 
             return (
               <div
@@ -161,12 +163,17 @@ export const ClauseAuditList: React.FC<ClauseAuditListProps> = ({ clauses }) => 
                     <span className="text-xs font-medium text-slate-300 px-2 py-0.5 rounded bg-slate-800/60 border border-slate-700/50">
                       {clause.clause_category}
                     </span>
-                    {isOmission && (
+                    {isOmission ? (
                       <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-red-950/60 text-red-300 border border-red-800/60 flex items-center gap-1 animate-pulse">
                         <AlertTriangle className="w-3 h-3 text-red-400" />
                         OMISSION DETECTED
                       </span>
-                    )}
+                    ) : matchInfo?.isVerified ? (
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                        <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                        Line {matchInfo.lineNumber} Ground Truth
+                      </span>
+                    ) : null}
                   </div>
 
                   <div className="flex items-center gap-3">
@@ -190,12 +197,24 @@ export const ClauseAuditList: React.FC<ClauseAuditListProps> = ({ clauses }) => 
                         <Quote className="w-3.5 h-3.5 text-amber-400" />
                         Strict Citation Lock (Verbatim Source Extract)
                       </span>
-                      <span className="text-[10px] text-amber-400/80 font-mono bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-                        ANTI-HALLUCINATION VERIFIED
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {onLocateInSource && !isOmission && (
+                          <button
+                            type="button"
+                            onClick={() => onLocateInSource(clause.clause_id)}
+                            className="text-[10px] text-amber-300/80 hover:text-amber-200 flex items-center gap-1 underline transition cursor-pointer"
+                          >
+                            <Crosshair className="w-3 h-3" />
+                            Locate in Source
+                          </button>
+                        )}
+                        <span className="text-[10px] text-amber-400/80 font-mono bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                          {isOmission ? 'OMISSION FLAGGED' : '100% VERBATIM LOCK'}
+                        </span>
+                      </div>
                     </div>
 
-                    <blockquote className="text-xs sm:text-sm text-slate-300 font-serif italic border-l-2 border-amber-500/60 pl-3 py-1 leading-relaxed bg-amber-500/[0.02]">
+                    <blockquote className="text-xs sm:text-sm text-slate-300 font-serif italic border-l-2 border-amber-500/60 pl-3 py-1 leading-relaxed bg-amber-500/[0.02] whitespace-pre-wrap">
                       "{clause.verbatim_quote}"
                     </blockquote>
                   </div>
@@ -205,7 +224,7 @@ export const ClauseAuditList: React.FC<ClauseAuditListProps> = ({ clauses }) => 
                     <div className="flex items-center gap-1.5 mb-2">
                       <HelpCircle className="w-3.5 h-3.5 text-indigo-400" />
                       <span className="text-xs font-semibold text-indigo-300 uppercase tracking-wider">
-                        Plain-English Translation (Practical Impact)
+                        Plain-English Translation (Operational Impact)
                       </span>
                     </div>
                     <p className="text-sm text-slate-200 leading-relaxed font-sans">
@@ -234,35 +253,13 @@ export const ClauseAuditList: React.FC<ClauseAuditListProps> = ({ clauses }) => 
                     </div>
                   )}
 
-                  {/* 4. Proposed Redline Ready for Negotiation */}
-                  <div className="rounded-lg bg-emerald-950/20 border border-emerald-500/30 p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5 uppercase tracking-wider">
-                        <FileEdit className="w-3.5 h-3.5" />
-                        Proposed Reciprocal Redline (Negotiation Alternative)
-                      </span>
-                      <button
-                        id={`copy-redline-btn-${idx}`}
-                        onClick={() => handleCopyRedline(clause.proposed_redline, idx)}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-medium transition cursor-pointer border border-emerald-500/40"
-                      >
-                        {copiedIndex === idx ? (
-                          <>
-                            <Check className="w-3 h-3 text-emerald-300" />
-                            <span>Copied Redline</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3 h-3 text-emerald-400" />
-                            <span>Copy Redline</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-
-                    <div className="font-mono text-xs text-emerald-200/90 bg-emerald-950/40 p-3 rounded-md border border-emerald-500/20 leading-relaxed whitespace-pre-wrap">
-                      {clause.proposed_redline}
-                    </div>
+                  {/* 4. Precision Redline Diff Component */}
+                  <div>
+                    <RedlineDiffViewer
+                      clauseId={clause.clause_id}
+                      originalQuote={clause.verbatim_quote}
+                      proposedRedline={clause.proposed_redline}
+                    />
                   </div>
                 </div>
               </div>

@@ -27,22 +27,31 @@ Your objective is to ingest complex legal instruments (contracts, policies, agre
 
 ### CORE OPERATIONAL DIRECTIVES
 
-1. STRICT CITATION LOCK (Anti-Hallucination):
+1. STRICT CITATION LOCK (Anti-Hallucination & Verbatim Accuracy):
    - You must never state a legal conclusion, obligation, or risk without quoting the exact verbatim text segment from the source document.
-   - If a clause does not exist or is missing standard protections (e.g., lack of mutual termination, missing force majeure), explicitly mark it as: "[OMISSION DETECTED]".
+   - The "verbatim_quote" field MUST be an EXACT contiguous copy-paste substring directly from the source instrument. Preserve all original capitalization, punctuation, and wording without alteration. Do not paraphrase or summarize inside "verbatim_quote".
+   - If a standard customary protection or covenant is missing (e.g. lack of mutual termination, missing vendor IP indemnity, missing duty to mitigate damages, missing audit rights), explicitly quote: "[OMISSION DETECTED: <specify the exact absent covenant>]".
 
-2. PLAIN-ENGLISH TRANSLATION:
+2. PLAIN-ENGLISH TRANSLATION (8th-Grade Reading Level):
    - Rewrite complex contractual clauses at an 8th-grade reading level.
-   - Clearly identify: "Who pays?", "Who takes the blame?", "When can they walk away?", and "What happens if things go wrong?"
+   - For every clause in "critical_clause_audit", your plain-English translation MUST explicitly and rigorously address:
+     1. "Who pays?"
+     2. "Who takes the blame?"
+     3. "When can they walk away?"
+     4. "What happens if things go wrong?"
 
 3. JURISDICTIONAL & ADVISORY BOUNDARIES:
    - Never use absolute directives such as "You must sign this" or "This violates the law."
    - Frame outputs as risk evaluations: "This term presents severe unilateral exposure under general contract standards because..."
    - Always append the mandatory advisory note: "For informational and educational purposes only. Consult certified local counsel before execution."
 
-4. BIAS & RECIPROCITY SCORING:
-   - Evaluate whether covenants (indemnification, non-compete, confidentiality, termination, liquidated damages) are mutual or unilateral.
-   - Assign an objective Document Fairness Index (DFI) from 0 to 100:
+4. BIAS & RECIPROCITY SCORING (Document Fairness Index 0 to 100):
+   - Objectively audit whether covenants (indemnification, liability cap, termination, non-compete, IP ownership, dispute resolution, payment terms) are reciprocal or unilateral.
+   - Calibrate the Document Fairness Index (DFI) mathematically:
+     * Start at 100 base points.
+     * Deduct 15–20 points for each heavily unilateral clause (e.g. uncapped one-way indemnity, $100 or sub-annual liability cap, vendor-only convenience termination).
+     * Deduct 10–15 points for moderate imbalances (e.g. unilateral fee shifting, Net-90 payment terms with forfeiture, overbroad non-competes).
+     * Deduct 10 points for each omitted standard protective covenant ([OMISSION DETECTED]).
      * 0–40: High Risk / Predatory / Heavily Unilateral
      * 41–70: Moderate Risk / Standard Corporate Terms requiring redlines
      * 71–100: Balanced / Fair Reciprocal Terms
@@ -51,7 +60,7 @@ Your objective is to ingest complex legal instruments (contracts, policies, agre
    - Trace contractual mechanisms under pressure across interconnected clauses:
      * Failure to pay / milestone breach
      * Early termination without cause
-     * IP ownership post-severance
+     * IP ownership post-severance / breach of confidential data
 
 ### OUTPUT FORMAT
 You must return valid, parseable JSON conforming to the requested schema. Return ONLY valid JSON.`;
@@ -183,6 +192,61 @@ ${documentText.trim()}
       }
 
       const parsed = JSON.parse(responseText);
+
+      // Strict Ground-Truth Citation Verification Check against original source text
+      if (Array.isArray(parsed.critical_clause_audit)) {
+        parsed.critical_clause_audit = parsed.critical_clause_audit.map((clause: any) => {
+          const quote = clause.verbatim_quote || "";
+          const isOmission = quote.includes("[OMISSION DETECTED]");
+
+          if (isOmission) {
+            return {
+              ...clause,
+              citation_verified: false,
+              match_confidence: 0,
+              is_omission: true
+            };
+          }
+
+          const exactIdx = documentText.indexOf(quote);
+          if (exactIdx !== -1) {
+            const lineNo = documentText.slice(0, exactIdx).split("\n").length;
+            return {
+              ...clause,
+              citation_verified: true,
+              match_confidence: 100,
+              match_offset: exactIdx,
+              line_number: lineNo
+            };
+          }
+
+          const lowerDoc = documentText.toLowerCase();
+          const lowerQuote = quote.toLowerCase();
+          const lowerIdx = lowerDoc.indexOf(lowerQuote);
+          if (lowerIdx !== -1) {
+            const lineNo = documentText.slice(0, lowerIdx).split("\n").length;
+            return {
+              ...clause,
+              citation_verified: true,
+              match_confidence: 95,
+              match_offset: lowerIdx,
+              line_number: lineNo
+            };
+          }
+
+          // Normalized match (spaces/line breaks collapsed)
+          const normDoc = documentText.replace(/\s+/g, " ");
+          const normQuote = quote.replace(/\s+/g, " ").trim();
+          const normIdx = normDoc.indexOf(normQuote);
+
+          return {
+            ...clause,
+            citation_verified: normIdx !== -1,
+            match_confidence: normIdx !== -1 ? 90 : 0
+          };
+        });
+      }
+
       return res.json(parsed);
     } catch (err: any) {
       console.error("Error analyzing document:", err);

@@ -14,6 +14,7 @@ import { AttorneyDossier } from './components/AttorneyDossier';
 import { DocumentModal } from './components/DocumentModal';
 import { ExportModal } from './components/ExportModal';
 import { SourceViewerModal } from './components/SourceViewerModal';
+import { SplitViewAuditor } from './components/SplitViewAuditor';
 import { 
   FileCheck, 
   Zap, 
@@ -26,7 +27,9 @@ import {
   Layers,
   CheckCircle,
   ExternalLink,
-  Info
+  Info,
+  Split,
+  Crosshair
 } from 'lucide-react';
 
 export default function App() {
@@ -38,7 +41,7 @@ export default function App() {
   const [selectedSampleId, setSelectedSampleId] = useState<string>(defaultSample.id);
 
   // Modals & UI states
-  const [activeTab, setActiveTab] = useState<'clauses' | 'stress' | 'dossier' | 'source'>('clauses');
+  const [activeTab, setActiveTab] = useState<'split' | 'clauses' | 'stress' | 'dossier'>('split');
   const [isDocModalOpen, setIsDocModalOpen] = useState<boolean>(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
   const [isSourceModalOpen, setIsSourceModalOpen] = useState<boolean>(false);
@@ -180,6 +183,22 @@ ${analysis.statutory_disclaimer}
             <div className="border-b border-slate-800 flex items-center justify-between flex-wrap gap-2">
               <nav className="flex space-x-1 sm:space-x-4">
                 <button
+                  id="tab-split"
+                  onClick={() => setActiveTab('split')}
+                  className={`py-3 px-3 text-xs sm:text-sm font-semibold border-b-2 flex items-center gap-2 transition cursor-pointer ${
+                    activeTab === 'split'
+                      ? 'border-amber-500 text-amber-400'
+                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Split className="w-4 h-4 text-amber-400" />
+                  <span>Dual-Pane Citation Inspector</span>
+                  <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800/60">
+                    Ground Truth
+                  </span>
+                </button>
+
+                <button
                   id="tab-clauses"
                   onClick={() => setActiveTab('clauses')}
                   className={`py-3 px-3 text-xs sm:text-sm font-semibold border-b-2 flex items-center gap-2 transition cursor-pointer ${
@@ -189,7 +208,7 @@ ${analysis.statutory_disclaimer}
                   }`}
                 >
                   <FileCheck className="w-4 h-4" />
-                  <span>Critical Clause Audit</span>
+                  <span>Clause Audit Cards</span>
                   <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-slate-300">
                     {analysis.critical_clause_audit.length}
                   </span>
@@ -229,17 +248,30 @@ ${analysis.statutory_disclaimer}
               </nav>
 
               <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400">
-                <span className="inline-flex items-center gap-1 text-[11px] text-amber-300/80">
-                  <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                  Strict Citation Lock Active
+                <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400/90 font-mono">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  100% Verbatim Ground Truth Active
                 </span>
               </div>
             </div>
 
             {/* Tab Views */}
             <div>
+              {activeTab === 'split' && (
+                <SplitViewAuditor
+                  documentText={currentDocumentText}
+                  clauses={analysis.critical_clause_audit}
+                />
+              )}
+
               {activeTab === 'clauses' && (
-                <ClauseAuditList clauses={analysis.critical_clause_audit} />
+                <ClauseAuditList
+                  clauses={analysis.critical_clause_audit}
+                  documentText={currentDocumentText}
+                  onLocateInSource={(clauseId) => {
+                    setActiveTab('split');
+                  }}
+                />
               )}
 
               {activeTab === 'stress' && (

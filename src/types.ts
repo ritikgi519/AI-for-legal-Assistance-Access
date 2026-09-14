@@ -13,12 +13,21 @@ export type ClauseCategory =
 
 export type UserProtectionLevel = 'Unprotected' | 'Partially Protected' | 'Well Protected';
 
+export interface DFIDeduction {
+  covenant: string;
+  status: 'Heavily Unilateral' | 'Moderately Asymmetric' | 'Balanced Reciprocal' | 'Omission Detected';
+  impact: number; // e.g. -20, -15, 0
+  party_favored: string;
+  rationale: string;
+}
+
 export interface DocumentOverview {
   document_title: string;
   document_type: string;
   parties_identified: string[];
   fairness_index: number; // 0 to 100
   executive_summary: string;
+  dfi_breakdown?: DFIDeduction[];
 }
 
 export interface CriticalClauseAudit {
@@ -30,6 +39,10 @@ export interface CriticalClauseAudit {
   party_favored: string; // e.g. "Vendor", "Client", "Mutual"
   hidden_pitfalls: string[];
   proposed_redline: string;
+  citation_verified?: boolean;
+  match_confidence?: number; // 0 to 100%
+  match_offset?: number;
+  line_number?: number;
 }
 
 export interface WhatIfStressTest {
