@@ -1,6 +1,7 @@
 import React from 'react';
 import { ShieldCheck, Scale, FileText, Download, Copy, Sparkles, AlertTriangle } from 'lucide-react';
-import { LexisenseAnalysisResult } from '../types';
+import { LexisenseAnalysisResult, SearchResultItem } from '../types';
+import { GlobalSearchBar } from './GlobalSearchBar';
 
 interface HeaderProps {
   onOpenNewAnalysis: () => void;
@@ -10,6 +11,8 @@ interface HeaderProps {
   hasAnalysis: boolean;
   analysis: LexisenseAnalysisResult | null;
   activeDocTitle?: string;
+  documentText?: string;
+  onSelectSearchResult?: (result: SearchResultItem) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -18,27 +21,30 @@ export const Header: React.FC<HeaderProps> = ({
   onCopyDossier,
   copiedDossier,
   hasAnalysis,
-  activeDocTitle
+  analysis,
+  activeDocTitle,
+  documentText = '',
+  onSelectSearchResult
 }) => {
   return (
     <header role="banner" className="border-b border-slate-800 bg-slate-900/90 backdrop-blur-md sticky top-0 z-40">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-4">
         {/* Left: Brand & Engine Identity */}
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-3 min-w-0 shrink-0">
           <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500/20 to-amber-700/30 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-sm shrink-0" aria-hidden="true">
             <Scale className="w-5 h-5 text-amber-400" />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 hidden md:block">
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-semibold tracking-tight text-white font-['Cinzel',serif]">
                 LEXISENSE
               </h1>
-              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30 font-medium">
+              <span className="hidden lg:inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30 font-medium">
                 <ShieldCheck className="w-3 h-3 text-amber-400" aria-hidden="true" />
                 Citation-Lock Engine
               </span>
             </div>
-            <p className="text-xs text-slate-400 truncate max-w-xs sm:max-w-md">
+            <p className="text-xs text-slate-400 truncate max-w-xs">
               {activeDocTitle ? (
                 <span className="text-slate-300 flex items-center gap-1.5">
                   <FileText className="w-3 h-3 text-amber-400 shrink-0" aria-hidden="true" />
@@ -50,6 +56,17 @@ export const Header: React.FC<HeaderProps> = ({
             </p>
           </div>
         </div>
+
+        {/* Global Semantic Search Bar */}
+        <GlobalSearchBar
+          analysis={analysis}
+          documentText={documentText}
+          onSelectResult={(result) => {
+            if (onSelectSearchResult) {
+              onSelectSearchResult(result);
+            }
+          }}
+        />
 
         {/* Right Actions */}
         <div className="flex items-center gap-2 shrink-0">

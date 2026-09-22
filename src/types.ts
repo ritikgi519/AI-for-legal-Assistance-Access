@@ -75,3 +75,102 @@ export interface SampleContract {
   content: string;
   presetAnalysis?: LexisenseAnalysisResult;
 }
+
+export type DiscrepancyType = 'MODIFIED' | 'ADDED' | 'REMOVED' | 'IDENTICAL';
+export type SubstantiveImpact = 'FAVORABLE_TO_USER' | 'UNFAVORABLE_TO_USER' | 'NEUTRAL' | 'CRITICAL_SHIFT';
+
+export interface ComparisonDiscrepancy {
+  id: string;
+  type: DiscrepancyType;
+  category: string;
+  title: string;
+  docAText: string;
+  docBText: string;
+  docALineStart: number;
+  docALineEnd: number;
+  docBLineStart: number;
+  docBLineEnd: number;
+  substantiveImpact: SubstantiveImpact;
+  explanation: string;
+}
+
+export interface DocumentComparisonResult {
+  docAName: string;
+  docBName: string;
+  similarityScore: number; // 0 to 100
+  totalDiscrepancies: number;
+  summary: {
+    modifications: number;
+    additions: number;
+    removals: number;
+    identicalSections: number;
+  };
+  discrepancies: ComparisonDiscrepancy[];
+}
+
+export type MilestoneCategory = 'EFFECTIVE' | 'PAYMENT' | 'NOTICE' | 'TERMINATION' | 'RENEWAL' | 'POST_TERMINATION' | 'CUSTOM';
+export type MilestoneUrgency = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+
+export interface ComplianceMilestone {
+  id: string;
+  title: string;
+  category: MilestoneCategory;
+  urgency: MilestoneUrgency;
+  dateLabel: string;
+  relativeOffsetDays: number; // approximate days from commencement for axis positioning
+  phase: string; // e.g. "Execution Phase", "Initial Term", "Renewal Window", "Post-Term"
+  clauseReference?: string; // e.g. "Section 6.1"
+  verbatimQuote?: string;
+  description: string;
+  actionRequired: string;
+  consequenceIfMissed: string;
+  isTrapClause?: boolean;
+}
+
+export interface ComplianceTimelineData {
+  effectiveDateStr?: string;
+  totalDurationDays: number;
+  initialTermMonths?: number;
+  renewalTermMonths?: number;
+  milestones: ComplianceMilestone[];
+}
+
+export type SearchResultType = 'CLAUSE' | 'STRESS_TEST' | 'TIMELINE_MILESTONE' | 'DOCUMENT_TEXT' | 'LEGAL_TOPIC';
+
+export interface SearchResultItem {
+  id: string;
+  type: SearchResultType;
+  title: string;
+  subtitle?: string;
+  category?: string;
+  badgeText?: string;
+  badgeColor?: string;
+  excerpt: string;
+  matchedField: string;
+  score: number;
+  targetTab: 'split' | 'clauses' | 'stress' | 'dossier' | 'timeline' | 'glossary';
+  clauseId?: string;
+  lineNumber?: number;
+}
+
+export type GlossaryCategory = 'Liability & Risk' | 'Remedies & Enforcement' | 'Administration & Notices' | 'Intellectual Property' | 'Boilerplate & Trap' | 'Financial & Payment';
+
+export interface GlossaryTermOccurrence {
+  lineNumber: number;
+  snippet: string;
+}
+
+export interface GlossaryTerm {
+  id: string;
+  term: string;
+  canonicalTerm: string;
+  category: GlossaryCategory;
+  plainEnglishDefinition: string;
+  whyPartiesUseIt: string;
+  hiddenPitfallOrRisk: string;
+  proTipsForNegotiation: string;
+  occurrenceCount: number;
+  occurrences: GlossaryTermOccurrence[];
+  riskSeverity: 'HIGH' | 'MEDIUM' | 'LOW';
+}
+

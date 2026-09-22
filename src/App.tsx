@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { SAMPLE_CONTRACTS } from './data/sampleContracts';
-import { LexisenseAnalysisResult, SampleContract } from './types';
+import { LexisenseAnalysisResult, SampleContract, SearchResultItem } from './types';
 import { Header } from './components/Header';
 import { FairnessGauge } from './components/FairnessGauge';
 import { ClauseAuditList } from './components/ClauseAuditList';
@@ -15,6 +15,8 @@ import { DocumentModal } from './components/DocumentModal';
 import { ExportModal } from './components/ExportModal';
 import { SourceViewerModal } from './components/SourceViewerModal';
 import { SplitViewAuditor } from './components/SplitViewAuditor';
+import { ComplianceTimelineView } from './components/ComplianceTimelineView';
+import { LegalGlossaryView } from './components/LegalGlossaryView';
 import { 
   FileCheck, 
   Zap, 
@@ -29,7 +31,9 @@ import {
   ExternalLink,
   Info,
   Split,
-  Crosshair
+  Crosshair,
+  Calendar,
+  BookOpen
 } from 'lucide-react';
 
 export default function App() {
@@ -41,7 +45,7 @@ export default function App() {
   const [selectedSampleId, setSelectedSampleId] = useState<string>(defaultSample.id);
 
   // Modals & UI states
-  const [activeTab, setActiveTab] = useState<'split' | 'clauses' | 'stress' | 'dossier'>('split');
+  const [activeTab, setActiveTab] = useState<'split' | 'clauses' | 'stress' | 'dossier' | 'timeline' | 'glossary'>('split');
   const [isDocModalOpen, setIsDocModalOpen] = useState<boolean>(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
   const [isSourceModalOpen, setIsSourceModalOpen] = useState<boolean>(false);
@@ -121,6 +125,11 @@ ${analysis.statutory_disclaimer}
     setTimeout(() => setCopiedDossier(false), 2000);
   };
 
+  // Handle selecting a search result item from the global semantic search bar
+  const handleSelectSearchResult = (result: SearchResultItem) => {
+    setActiveTab(result.targetTab);
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       {/* Accessible Skip Link */}
@@ -145,6 +154,8 @@ ${analysis.statutory_disclaimer}
         hasAnalysis={!!analysis}
         analysis={analysis}
         activeDocTitle={currentDocTitle}
+        documentText={currentDocumentText}
+        onSelectSearchResult={handleSelectSearchResult}
       />
 
       {/* Benchmark Selector Bar */}
@@ -273,6 +284,44 @@ ${analysis.statutory_disclaimer}
                     High Leverage
                   </span>
                 </button>
+
+                <button
+                  id="tab-timeline"
+                  role="tab"
+                  aria-selected={activeTab === 'timeline'}
+                  aria-controls="panel-timeline"
+                  onClick={() => setActiveTab('timeline')}
+                  className={`py-3 px-3 text-xs sm:text-sm font-semibold border-b-2 flex items-center gap-2 transition cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:outline-none ${
+                    activeTab === 'timeline'
+                      ? 'border-amber-500 text-amber-400'
+                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Calendar className="w-4 h-4 text-amber-400" aria-hidden="true" />
+                  <span>Compliance Timeline</span>
+                  <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-amber-950/80 text-amber-300 border border-amber-800/60 font-mono">
+                    Deadlines
+                  </span>
+                </button>
+
+                <button
+                  id="tab-glossary"
+                  role="tab"
+                  aria-selected={activeTab === 'glossary'}
+                  aria-controls="panel-glossary"
+                  onClick={() => setActiveTab('glossary')}
+                  className={`py-3 px-3 text-xs sm:text-sm font-semibold border-b-2 flex items-center gap-2 transition cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:outline-none ${
+                    activeTab === 'glossary'
+                      ? 'border-amber-500 text-amber-400'
+                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <BookOpen className="w-4 h-4 text-amber-400" aria-hidden="true" />
+                  <span>Legal Glossary</span>
+                  <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/30 font-mono font-medium">
+                    Plain English
+                  </span>
+                </button>
               </nav>
 
               <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400">
@@ -290,6 +339,7 @@ ${analysis.statutory_disclaimer}
                   <SplitViewAuditor
                     documentText={currentDocumentText}
                     clauses={analysis.critical_clause_audit}
+                    documentTitle={analysis.document_overview.document_title || currentDocTitle}
                   />
                 </section>
               )}
@@ -322,6 +372,31 @@ ${analysis.statutory_disclaimer}
                     docTitle={analysis.document_overview.document_title}
                     fairnessIndex={analysis.document_overview.fairness_index}
                     disclaimer={analysis.statutory_disclaimer}
+                  />
+                </section>
+              )}
+
+              {activeTab === 'timeline' && (
+                <section role="tabpanel" id="panel-timeline" aria-labelledby="tab-timeline" tabIndex={0} className="focus:outline-none">
+                  <ComplianceTimelineView
+                    documentText={currentDocumentText}
+                    documentTitle={analysis.document_overview.document_title || currentDocTitle}
+                    clauses={analysis.critical_clause_audit}
+                    onNavigateToClause={(_clauseId) => {
+                      setActiveTab('split');
+                    }}
+                  />
+                </section>
+              )}
+
+              {activeTab === 'glossary' && (
+                <section role="tabpanel" id="panel-glossary" aria-labelledby="tab-glossary" tabIndex={0} className="focus:outline-none">
+                  <LegalGlossaryView
+                    documentText={currentDocumentText}
+                    documentTitle={analysis.document_overview.document_title || currentDocTitle}
+                    onLocateInSource={(_lineNumber) => {
+                      setActiveTab('split');
+                    }}
                   />
                 </section>
               )}
