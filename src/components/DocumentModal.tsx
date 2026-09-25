@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { SAMPLE_CONTRACTS } from '../data/sampleContracts';
 import { SampleContract } from '../types';
+import { validateLegalDocumentFile, sanitizeTextInput } from '../utils/security';
 import { 
   X, 
   Upload, 
@@ -35,21 +36,31 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
   const [docTitle, setDocTitle] = useState('');
   const [perspective, setPerspective] = useState('Neutral Auditor / General Counterparty Protection');
   const [activeTab, setActiveTab] = useState<'custom' | 'samples'>('custom');
+  const [validationError, setValidationError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const processFile = (file: File) => {
+    setValidationError(null);
     setDocTitle(file.name.replace(/\.[^/.]+$/, ''));
     const reader = new FileReader();
     reader.onload = (event) => {
-      const content = event.target?.result as string;
-      setInputText(content);
+      const content = (event.target?.result as string) || '';
+      const validation = validateLegalDocumentFile(file, content);
+      if (!validation.valid) {
+        setValidationError(validation.error || 'Invalid contract file.');
+        return;
+      }
+      setInputText(validation.sanitizedText || content);
     };
     reader.readAsText(file);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    processFile(file);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -60,20 +71,22 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
     if (!file) return;
-
-    setDocTitle(file.name.replace(/\.[^/.]+$/, ''));
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      setInputText(content);
-    };
-    reader.readAsText(file);
+    processFile(file);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim()) return;
-    await onAnalyze(inputText.trim(), docTitle.trim() || 'Custom Legal Instrument', perspective);
+    setValidationError(null);
+    const sanitized = sanitizeTextInput(inputText);
+    if (!sanitized) {
+      setValidationError('Please provide document text to analyze.');
+      return;
+    }
+    if (sanitized.length < 20) {
+      setValidationError('Document text is too short. Minimum 20 characters required.');
+      return;
+    }
+    await onAnalyze(sanitized, docTitle.trim() || 'Custom Legal Instrument', perspective);
   };
 
   const wordCount = inputText.trim() ? inputText.trim().split(/\s+/).length : 0;
@@ -150,10 +163,10 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
 
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto flex-1 space-y-4">
-          {error && (
+          {(error || validationError) && (
             <div role="alert" className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-red-400 shrink-0" aria-hidden="true" />
-              <span>{error}</span>
+              <span>{validationError || error}</span>
             </div>
           )}
 

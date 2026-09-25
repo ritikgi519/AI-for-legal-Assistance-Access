@@ -1,5 +1,6 @@
 import { ComparisonDiscrepancy, DiscrepancyType, DocumentComparisonResult, SubstantiveImpact } from '../types';
 import { generateWordDiff } from './citationMatcher';
+import { FastLRUCache } from './memoCache';
 
 export interface DocumentBlock {
   id: string;
@@ -229,8 +230,12 @@ function analyzeSubstantiveVariation(
   };
 }
 
+const comparisonCache = new FastLRUCache<DocumentComparisonResult>(30);
+
 /**
- * Compares two documents side-by-side and returns a comprehensive discrepancy ledger
+ * Compares two documents side-by-side and returns a comprehensive discrepancy ledger.
+ * Memoized via FastLRUCache for instant O(1) returns on identical document pairs.
+ * @complexity O(A * B) on initial compute, O(1) on cache hit
  */
 export function compareDocuments(
   docAText: string,
@@ -238,6 +243,12 @@ export function compareDocuments(
   docAName: string = 'Current Loaded Instrument',
   docBName: string = 'Comparison Document'
 ): DocumentComparisonResult {
+  const cacheKey = `${FastLRUCache.hashKey(docAText, 'docA')}:${FastLRUCache.hashKey(docBText, 'docB')}:${docAName}:${docBName}`;
+  const cached = comparisonCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   const segA = segmentDocument(docAText);
   const segB = segmentDocument(docBText);
 
@@ -362,7 +373,7 @@ export function compareDocuments(
   const overallJaccard = calculateJaccard(allWordsA, allWordsB);
   const similarityScore = Math.round(overallJaccard * 100);
 
-  return {
+  const result: DocumentComparisonResult = {
     docAName,
     docBName,
     similarityScore,
@@ -375,4 +386,7 @@ export function compareDocuments(
     },
     discrepancies
   };
+
+  comparisonCache.set(cacheKey, result);
+  return result;
 }

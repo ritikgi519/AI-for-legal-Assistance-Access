@@ -1,13 +1,14 @@
 import { CriticalClauseAudit, LexisenseAnalysisResult, SearchResultItem, WhatIfStressTest } from '../types';
 import { extractComplianceTimeline } from './timelineExtractor';
 import { parseDocumentGlossary } from './legalGlossaryParser';
+import { FastLRUCache } from './memoCache';
 
 // Semantic legal topic taxonomy mapping common terms, intent, and synonyms
 const LEGAL_TAXONOMY: Record<string, { topic: string; synonyms: string[]; category: string }> = {
   liability: {
     topic: 'Limitation of Liability & Damages',
     category: 'Liability',
-    synonyms: ['liability', 'cap', 'damages', 'consequential', 'supercap', 'punitive', 'aggregate', 'limitation', 'uncapped', 'gross negligence', '$100', 'indirect']
+    synonyms: ['liability', 'cap', 'damages', 'consequential', 'supercap', 'punitive', 'aggregate', 'limitation', 'uncapped', 'gross negligence', '$100', 'indirect', 'loss of profits']
   },
   indemnity: {
     topic: 'Indemnification & Defense Obligations',
@@ -17,12 +18,27 @@ const LEGAL_TAXONOMY: Record<string, { topic: string; synonyms: string[]; catego
   termination: {
     topic: 'Termination Rights & Non-Renewal Cutoffs',
     category: 'Termination',
-    synonyms: ['terminat', 'termination', 'cancel', 'cancellation', 'convenience', 'material breach', 'notice period', 'cure', 'auto-renew', 'renewal', 'expire', 'expiration', 'trap', 'non-renewal']
+    synonyms: ['terminat', 'termination', 'cancel', 'cancellation', 'convenience', 'material breach', 'notice period', 'cure', 'auto-renew', 'renewal', 'expire', 'expiration', 'trap', 'non-renewal', '30 days']
   },
   payment: {
     topic: 'Billing, Invoicing & Late Payment Penalties',
     category: 'Payment',
-    synonyms: ['pay', 'payment', 'fee', 'fees', 'invoice', 'billing', 'net 15', 'net 30', 'interest', 'late fee', 'price', 'pricing', 'advance', 'non-refundable', 'charges']
+    synonyms: ['pay', 'payment', 'fee', 'fees', 'invoice', 'billing', 'net 15', 'net 30', 'interest', 'late fee', 'price', 'pricing', 'advance', 'non-refundable', 'charges', 'overdue']
+  },
+  ip: {
+    topic: 'Intellectual Property Ownership & Licensing',
+    category: 'IP',
+    synonyms: ['ip', 'intellectual property', 'patent', 'copyright', 'trademark', 'trade secret', 'ownership', 'work made for hire', 'license', 'licensing', 'derivative work', 'background ip', 'infringe']
+  },
+  assignment: {
+    topic: 'Assignment & Change of Control',
+    category: 'Assignment',
+    synonyms: ['assign', 'assignment', 'subcontract', 'subcontracting', 'change of control', 'transfer', 'merger', 'acquisition', 'affiliate', 'delegate']
+  },
+  audit: {
+    topic: 'Audit & Books Inspection Rights',
+    category: 'Audit',
+    synonyms: ['audit', 'inspection', 'books', 'records', 'compliance', 'verify', 'auditor', 'examine', 'accounting']
   },
   noncompete: {
     topic: 'Non-Compete & Restrictive Covenants',
@@ -48,11 +64,25 @@ const LEGAL_TAXONOMY: Record<string, { topic: string; synonyms: string[]; catego
     topic: 'Service Level Agreement & Uptime',
     category: 'SLA',
     synonyms: ['sla', 'uptime', 'downtime', 'availability', '99.9%', 'credits', 'support', 'response time', 'maintenance']
+  },
+  force_majeure: {
+    topic: 'Force Majeure & Unforeseen Events',
+    category: 'Force Majeure',
+    synonyms: ['force majeure', 'act of god', 'pandemic', 'war', 'epidemic', 'unforeseeable', 'governmental action', 'disaster']
+  },
+  remedies: {
+    topic: 'Remedies, Injunctions & Equitable Relief',
+    category: 'Remedies',
+    synonyms: ['sole remedy', 'exclusive remedy', 'injunction', 'injunctive relief', 'equitable relief', 'specific performance', 'irreparable harm']
   }
 };
 
+const searchCache = new FastLRUCache<SearchResultItem[]>(60);
+
 /**
  * Performs semantic search across loaded document, clause audits, stress tests, and timeline milestones.
+ * Accelerated with FastLRUCache for instant O(1) autocomplete and search retrieval.
+ * @complexity O(N) where N is number of clauses + milestones, O(1) on cache hit
  */
 export function performSemanticSearch(
   query: string,
@@ -61,6 +91,12 @@ export function performSemanticSearch(
 ): SearchResultItem[] {
   const trimmed = query.trim().toLowerCase();
   if (!trimmed || trimmed.length < 2) return [];
+
+  const cacheKey = `${trimmed}:${FastLRUCache.hashKey(documentText, 'searchDoc')}:${analysis?.document_overview.fairness_index ?? 0}`;
+  const cached = searchCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
 
   const results: SearchResultItem[] = [];
   const queryTokens = trimmed.split(/\s+/).filter(t => t.length > 1);
@@ -73,6 +109,23 @@ export function performSemanticSearch(
     if (isMatched) {
       matchedTaxonomies.push({ key, topic: entry.topic, category: entry.category });
     }
+  }
+
+  // Feature Match: Risk Radar & Matrix
+  if (trimmed.includes('radar') || trimmed.includes('matrix') || trimmed.includes('risk-reward') || trimmed.includes('quadrant') || trimmed.includes('pitfall') || trimmed.includes('spider')) {
+    results.push({
+      id: 'feature-risk-radar',
+      type: 'LEGAL_TOPIC',
+      title: 'Contractual Risk Radar & Value Matrix (D3 Audit)',
+      subtitle: 'Visual 2D Scatter Matrix & Multi-Axis Spider Chart',
+      category: 'Visual Audit',
+      badgeText: 'D3 RADAR',
+      badgeColor: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
+      excerpt: 'Interactive D3 visualization mapping all contractual clauses across liability risk and operational protective upside into 4 distinct quadrants: Toxic Pitfalls, Strategic Bets, Golden Covenants, and Boilerplate.',
+      matchedField: 'Risk Radar Tool',
+      score: 160,
+      targetTab: 'radar'
+    });
   }
 
   // 1. Search in Critical Clause Audits
@@ -323,5 +376,7 @@ export function performSemanticSearch(
   // Sort descending by relevance score
   results.sort((a, b) => b.score - a.score);
 
-  return results.slice(0, 15);
+  const topResults = results.slice(0, 15);
+  searchCache.set(cacheKey, topResults);
+  return topResults;
 }

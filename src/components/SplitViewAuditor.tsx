@@ -2,8 +2,10 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { CriticalClauseAudit, GlossaryTerm } from '../types';
 import { verifyCitation } from '../utils/citationMatcher';
 import { parseDocumentGlossary } from '../utils/legalGlossaryParser';
+import { getClauseRiskIndicator } from '../utils/clauseExport';
 import { RedlineDiffViewer } from './RedlineDiffViewer';
 import { DocumentComparisonView } from './DocumentComparisonView';
+import { ClauseBenchmarkModal } from './ClauseBenchmarkModal';
 import { 
   ShieldCheck, 
   AlertTriangle, 
@@ -19,20 +21,31 @@ import {
   GitCompare,
   BookOpen,
   X,
-  Info
+  Info,
+  Pin,
+  Flame,
+  Shield
 } from 'lucide-react';
+import { PinnedDossierItem } from '../utils/pinnedDossierTracker';
+import { getClauseToneSentiment } from '../utils/clauseToneAnalyzer';
 
 interface SplitViewAuditorProps {
   documentText: string;
   clauses: CriticalClauseAudit[];
   onSelectClause?: (clauseId: string) => void;
   documentTitle?: string;
+  focusedClauseId?: string | null;
+  pinnedItems?: Record<string, PinnedDossierItem>;
+  onTogglePin?: (clause: CriticalClauseAudit) => void;
 }
 
 export const SplitViewAuditor: React.FC<SplitViewAuditorProps> = ({
   documentText,
   clauses,
-  documentTitle = 'Current Loaded Instrument'
+  documentTitle = 'Current Loaded Instrument',
+  focusedClauseId,
+  pinnedItems = {},
+  onTogglePin
 }) => {
   const [inspectorMode, setInspectorMode] = useState<'citation' | 'compare'>('citation');
   const [diffMode, setDiffMode] = useState<boolean>(true);
@@ -41,7 +54,15 @@ export const SplitViewAuditor: React.FC<SplitViewAuditorProps> = ({
   );
   const [showGlossaryHighlights, setShowGlossaryHighlights] = useState<boolean>(true);
   const [popoverTerm, setPopoverTerm] = useState<GlossaryTerm | null>(null);
+  const [benchmarkModalClause, setBenchmarkModalClause] = useState<CriticalClauseAudit | null>(null);
   const docContainerRef = useRef<HTMLDivElement>(null);
+
+  // Sync focusedClauseId when search result triggers navigation
+  useEffect(() => {
+    if (focusedClauseId) {
+      setSelectedClauseId(focusedClauseId);
+    }
+  }, [focusedClauseId]);
 
   // Parse lines with matching metadata
   const lines = documentText.split('\n');
@@ -61,6 +82,8 @@ export const SplitViewAuditor: React.FC<SplitViewAuditorProps> = ({
   });
 
   const activeClause = verifiedClauses.find(c => c.clause_id === selectedClauseId) || verifiedClauses[0];
+  const activeRiskIndicator = activeClause ? getClauseRiskIndicator(activeClause) : null;
+  const activeToneConfig = activeClause ? getClauseToneSentiment(activeClause) : null;
 
   // Auto scroll to active clause in the source text panel
   const scrollToClause = (clause: typeof activeClause) => {
@@ -370,25 +393,87 @@ export const SplitViewAuditor: React.FC<SplitViewAuditorProps> = ({
 
             {/* Right Pane: Selected Clause Deep Deconstruction & Precision Redline (7 cols) */}
             <div className="lg:col-span-7 flex flex-col p-6 space-y-5 overflow-y-auto max-h-[660px] bg-slate-900">
-              {activeClause ? (
+              {activeClause && activeRiskIndicator ? (
                 <>
                   {/* Active Clause Header & Ground-Truth Match Verification */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-sm font-bold font-mono px-2.5 py-1 rounded-md bg-slate-800 text-amber-300 border border-slate-700">
-                        {activeClause.clause_id}
-                      </span>
-                      <span className="text-xs font-semibold text-slate-200 px-2 py-0.5 rounded bg-slate-800/80 border border-slate-700">
-                        {activeClause.clause_category}
-                      </span>
-                      <span className="text-xs text-slate-400 flex items-center gap-1">
-                        <Scale className="w-3 h-3 text-slate-500" />
-                        Favors: <strong className="text-slate-200">{activeClause.party_favored}</strong>
-                      </span>
-                    </div>
+                      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                          <span className="text-sm font-bold font-mono px-2.5 py-1 rounded-md bg-slate-800 text-amber-300 border border-slate-700">
+                            {activeClause.clause_id}
+                          </span>
+                          <span className="text-xs font-semibold text-slate-200 px-2 py-0.5 rounded bg-slate-800/80 border border-slate-700">
+                            {activeClause.clause_category}
+                          </span>
 
-                    {/* Verification Confidence Indicator */}
-                    <div>
+                          {/* Small Color-Coded Risk Indicator Tag (Low, Medium, High) based on internal risk assessment score */}
+                          <span
+                            data-testid="splitview-clause-risk-tag"
+                            data-risk-tier={activeRiskIndicator.tier}
+                            data-risk-score={activeRiskIndicator.score}
+                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold border shadow-2xs ${activeRiskIndicator.badge}`}
+                            title={activeRiskIndicator.tooltip}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${activeRiskIndicator.dot}`} />
+                            <span>{activeRiskIndicator.tier}</span>
+                            <span className="font-mono text-[9px] px-1 py-0.2 rounded bg-black/40 text-slate-200 font-medium">
+                              {activeRiskIndicator.score}/100
+                            </span>
+                          </span>
+
+                          {/* Legalese Tone Sentiment Badge (Assertive, Neutral, Protective) to gauge party intent */}
+                          {activeToneConfig && (
+                            <span
+                              data-testid="splitview-clause-sentiment-badge"
+                              data-sentiment={activeToneConfig.sentiment}
+                              data-sentiment-score={activeToneConfig.score}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border shadow-2xs transition cursor-help ${activeToneConfig.badge}`}
+                              title={activeToneConfig.tooltip}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${activeToneConfig.dot}`} />
+                              {activeToneConfig.sentiment === 'Assertive' && <Flame className="w-3 h-3 text-purple-400 shrink-0" aria-hidden="true" />}
+                              {activeToneConfig.sentiment === 'Protective' && <Shield className="w-3 h-3 text-sky-400 shrink-0" aria-hidden="true" />}
+                              {activeToneConfig.sentiment === 'Neutral' && <Scale className="w-3 h-3 text-slate-400 shrink-0" aria-hidden="true" />}
+                              <span>{activeToneConfig.label}</span>
+                            </span>
+                          )}
+
+                          <span className="text-xs text-slate-400 flex items-center gap-1">
+                            <Scale className="w-3 h-3 text-slate-500" />
+                            Favors: <strong className="text-slate-200">{activeClause.party_favored}</strong>
+                          </span>
+                        </div>
+
+                    {/* Verification Confidence Indicator, Pin to Dossier & Benchmark CTA */}
+                    <div className="flex items-center gap-2">
+                      {onTogglePin && (
+                        <button
+                          type="button"
+                          id={`btn-splitview-pin-${activeClause.clause_id}`}
+                          onClick={() => onTogglePin(activeClause)}
+                          aria-label={`${pinnedItems[activeClause.clause_id] ? 'Unpin' : 'Pin'} clause ${activeClause.clause_id} to consultation dossier`}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition cursor-pointer shadow-xs ${
+                            pinnedItems[activeClause.clause_id]
+                              ? 'bg-amber-500/25 text-amber-200 border-amber-500/60 ring-1 ring-amber-500/40 hover:bg-amber-500/35'
+                              : 'bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border-slate-700'
+                          }`}
+                          title={pinnedItems[activeClause.clause_id] ? 'Clause is pinned to your dossier (click to unpin)' : 'Pin clause to your curated consultation dossier'}
+                        >
+                          <Pin className={`w-3.5 h-3.5 ${pinnedItems[activeClause.clause_id] ? 'text-amber-400 fill-amber-400/40' : 'text-slate-400'}`} />
+                          <span>{pinnedItems[activeClause.clause_id] ? 'Pinned to Dossier' : 'Pin to Dossier'}</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        id="btn-splitview-compare-benchmark"
+                        onClick={() => setBenchmarkModalClause(activeClause)}
+                        aria-label={`Compare ${activeClause.clause_id} against industry standard benchmark`}
+                        className="px-2.5 py-1 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 hover:text-amber-200 rounded-lg text-xs font-semibold border border-amber-500/35 flex items-center gap-1.5 transition cursor-pointer shadow-xs hover:border-amber-500/60"
+                      >
+                        <Scale className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Compare against Benchmark</span>
+                      </button>
+
                       {activeClause.match.isVerified ? (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">
                           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
@@ -464,10 +549,12 @@ export const SplitViewAuditor: React.FC<SplitViewAuditorProps> = ({
                     </div>
                   )}
 
-                  {/* Precision Redline Diff Component */}
+                  {/* Precision Redline & Diff Engine */}
                   <div>
                     <RedlineDiffViewer
                       clauseId={activeClause.clause_id}
+                      clauseCategory={activeClause.clause_category}
+                      partyFavored={activeClause.party_favored}
                       originalQuote={activeClause.verbatim_quote}
                       proposedRedline={activeClause.proposed_redline}
                     />
@@ -482,6 +569,16 @@ export const SplitViewAuditor: React.FC<SplitViewAuditorProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Clause Benchmark Comparison Modal */}
+      {benchmarkModalClause && (
+        <ClauseBenchmarkModal
+          isOpen={!!benchmarkModalClause}
+          onClose={() => setBenchmarkModalClause(null)}
+          clause={benchmarkModalClause}
+          documentTitle={documentTitle}
+        />
       )}
     </div>
   );

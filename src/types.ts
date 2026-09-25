@@ -30,6 +30,21 @@ export interface DocumentOverview {
   dfi_breakdown?: DFIDeduction[];
 }
 
+export type ClauseToneSentiment = 'Assertive' | 'Neutral' | 'Protective';
+
+export interface ClauseToneConfig {
+  sentiment: ClauseToneSentiment;
+  score: number; // 0 to 100 confidence/strength score
+  label: string; // 'Assertive' | 'Neutral' | 'Protective'
+  badge: string;
+  dot: string;
+  icon: 'Flame' | 'Shield' | 'Scale';
+  partyIntentSummary: string;
+  keyMarkers: string[];
+  tooltip: string;
+  strategicAdvice: string;
+}
+
 export interface CriticalClauseAudit {
   clause_id: string; // e.g. "Section 11.2"
   clause_category: ClauseCategory | string;
@@ -44,6 +59,7 @@ export interface CriticalClauseAudit {
   match_confidence?: number; // 0 to 100%
   match_offset?: number;
   line_number?: number;
+  legalese_tone?: ClauseToneSentiment;
 }
 
 export interface WhatIfStressTest {
@@ -148,7 +164,7 @@ export interface SearchResultItem {
   excerpt: string;
   matchedField: string;
   score: number;
-  targetTab: 'split' | 'clauses' | 'stress' | 'dossier' | 'timeline' | 'glossary';
+  targetTab: 'split' | 'clauses' | 'stress' | 'dossier' | 'timeline' | 'glossary' | 'radar';
   clauseId?: string;
   lineNumber?: number;
 }
@@ -172,5 +188,38 @@ export interface GlossaryTerm {
   occurrenceCount: number;
   occurrences: GlossaryTermOccurrence[];
   riskSeverity: 'HIGH' | 'MEDIUM' | 'LOW';
+}
+
+export type RiskRewardQuadrant = 
+  | 'TOXIC_PITFALL'       // High Risk, Low Reward (Red)
+  | 'STRATEGIC_BET'       // High Risk, High Reward (Orange/Amber)
+  | 'GOLDEN_COVENANT'     // Low Risk, High Reward (Emerald/Green)
+  | 'STANDARD_BOILERPLATE';// Low Risk, Low Reward (Slate/Blue)
+
+export interface RiskRadarNode {
+  id: string;
+  clauseId: string;
+  title: string;
+  category: string;
+  riskScore: number;    // 0 to 100 (X-axis in matrix, distance from center in radar)
+  rewardScore: number;  // 0 to 100 (Y-axis in matrix, strategic value)
+  blastRadius: number;  // Impact size in px (e.g. 8 to 22)
+  quadrant: RiskRewardQuadrant;
+  riskLevel: RiskLevel;
+  verbatimQuote: string;
+  plainEnglishMeaning: string;
+  partyFavored: string;
+  hiddenPitfalls: string[];
+  proposedRedline: string;
+  lineNumber?: number;
+}
+
+export interface RadarCategoryAggregate {
+  category: string;
+  avgRisk: number;
+  avgReward: number;
+  count: number;
+  criticalCount: number;
+  maxRiskClause: string;
 }
 

@@ -41,6 +41,21 @@ const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_REQUESTS_PER_WINDOW = 60;
 
+// Periodic cleanup of expired rate limit and cache entries to guarantee zero memory leaks
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, record] of rateLimitMap.entries()) {
+    if (now > record.resetTime) {
+      rateLimitMap.delete(ip);
+    }
+  }
+  for (const [key, entry] of analysisCache.entries()) {
+    if (now - entry.timestamp > CACHE_TTL_MS) {
+      analysisCache.delete(key);
+    }
+  }
+}, 5 * 60 * 1000);
+
 function rateLimitMiddleware(req: express.Request, res: express.Response, next: express.NextFunction) {
   const ip = req.ip || req.socket.remoteAddress || "unknown-ip";
   const now = Date.now();
@@ -433,6 +448,172 @@ Trace the step-by-step consequence chain across interconnected contractual claus
       return res.status(500).json({ error: "Scenario stress-test could not be completed." });
     }
   });
+
+  // Ask the Attorney AI Chatbot Endpoint (Contextually integrates with Curated Dossier)
+  app.post("/api/chat-attorney", rateLimitMiddleware, async (req, res) => {
+    try {
+      const { messages, curatedDossierItems, documentContext } = req.body;
+      
+      if (!Array.isArray(messages) || messages.length === 0) {
+        return res.status(400).json({ error: "Messages array is required." });
+      }
+
+      const lastUserMessage = messages[messages.length - 1]?.content || "";
+      if (typeof lastUserMessage !== "string" || !lastUserMessage.trim()) {
+        return res.status(400).json({ error: "Last message content is required." });
+      }
+
+      const safeItems = Array.isArray(curatedDossierItems) ? curatedDossierItems.slice(0, 25) : [];
+      const safeDocContext = typeof documentContext === "object" && documentContext !== null ? documentContext : {};
+
+      // Prepare Structured Dossier Context Block
+      const dossierSummary = safeItems.length > 0
+        ? safeItems.map((item: any, idx: number) => {
+            return `[CURATED CLAUSE ${idx + 1}: ${item.clauseId || "Unknown"} (${item.category || "General Terms"})]
+- Priority Tier: ${item.priority || "NORMAL"}
+- Risk Level: ${item.riskLevel || "MEDIUM"}
+- Party Favored in Source: ${item.partyFavored || "Counterparty"}
+- Verbatim Contract Extract: "${(item.verbatimQuote || "").slice(0, 800)}"
+- Plain English Translation: "${(item.plainEnglish || "").slice(0, 400)}"
+- Proposed Balanced Redline: "${(item.proposedRedline || "").slice(0, 800)}"
+- Client Specific Notes & Negotiation Goals: "${item.clientNotes || item.customNote || "Standard consultation"}"`;
+          }).join("\n\n")
+        : "No specific clauses pinned to curated dossier yet. The user is asking general contract and negotiation strategy questions.";
+
+      const docSummary = `Document Title: ${safeDocContext.title || "Commercial Agreement"}
+Document Fairness Index (DFI): ${safeDocContext.fairnessScore ?? "N/A"}/100
+General Posture: ${safeDocContext.partyFavored || "Unilateral Counterparty Favor"}`;
+
+      const ai = getGeminiClient();
+
+      if (ai) {
+        const systemPrompt = `You are Counsel Strategist, an elite commercial transactions attorney and contract negotiation consultant within the Lexisense intelligence engine.
+Your purpose is to provide sophisticated, actionable, pragmatic negotiation advice directly grounded in the client's curated dossier items.
+
+### DOCUMENT BACKGROUND:
+${docSummary}
+
+### CURATED DOSSIER OF PINNED CLAUSES & CLIENT NOTES:
+${dossierSummary}
+
+### CORE CONSULTATION DIRECTIVES:
+1. SPECIFICITY: Directly cite and cross-reference the client's curated clauses (${safeItems.map((i: any) => i.clauseId).filter(Boolean).join(", ") || "general clauses"}), their assigned priority levels, and their custom client notes.
+2. TACTICAL PLAYBOOK: Provide concrete counter-arguments, compromise alternatives, and specific redline language the client can propose.
+3. LEVERAGE MATRIX: Explain where to stand firm (deal-breakers / walkaway thresholds) versus where pragmatic concessions can be traded for valuable protections.
+4. OUTSIDE COUNSEL PREPARATION: Provide 2-3 precise, high-impact questions the client should ask their retained human attorney during formal consultation.
+5. FORMATTING: Use clean markdown with clear headers (e.g. ### 1. Strategic Leverage Assessment), bullet points, and blockquotes for suggested legal drafting.
+6. DISCLAIMER: Always conclude with a concise educational notice that this analysis is strategic legal intelligence and negotiation preparation, not formal attorney-client legal representation.`;
+
+        const conversationHistory = messages.slice(0, -1).map((m: any) => `${m.role === 'user' ? 'Client' : 'Counsel Strategist'}: ${m.content}`).join("\n\n");
+        const fullPrompt = `${conversationHistory ? `Conversation History:\n${conversationHistory}\n\n` : ''}Client Question: ${lastUserMessage}`;
+
+        const response = await ai.models.generateContent({
+          model: "gemini-3.8-flash",
+          contents: fullPrompt,
+          config: {
+            systemInstruction: systemPrompt,
+            temperature: 0.3,
+          }
+        });
+
+        const replyText = response.text || "Counsel Strategist was unable to synthesize a response. Please try rephrasing your negotiation question.";
+
+        return res.json({
+          reply: replyText,
+          timestamp: Date.now(),
+          model: "gemini-3.8-flash",
+          curatedItemsConsidered: safeItems.length
+        });
+      }
+
+      // Simulated Attorney Response Fallback when GEMINI_API_KEY is not configured
+      const simulatedReply = generateSimulatedAttorneyResponse(lastUserMessage, safeItems, safeDocContext);
+      return res.json({
+        reply: simulatedReply,
+        timestamp: Date.now(),
+        model: "simulated-attorney-strategist",
+        curatedItemsConsidered: safeItems.length
+      });
+
+    } catch (err: any) {
+      console.error("Error in /api/chat-attorney:", err);
+      return res.status(500).json({ error: "Failed to process attorney chat query." });
+    }
+  });
+
+  function generateSimulatedAttorneyResponse(
+    query: string,
+    curatedItems: any[],
+    docContext: any
+  ): string {
+    const queryLower = query.toLowerCase();
+
+    if (curatedItems.length === 0) {
+      return `### Strategic Consultation Overview
+
+I am your **AI Legal Strategy Consultant**. Currently, your curated dossier has no pinned clauses loaded.
+
+To give you laser-focused negotiation strategy:
+1. Browse the **Clause Audit Cards** and click **Pin to Dossier** on your high-risk or contentious clauses.
+2. Add your specific client consultation notes and priority levels (e.g. *"Ask if a 12-month cap is standard for SaaS"*).
+3. Return here, and I will analyze those exact covenants, construct counter-proposals, and formulate your negotiation leverage matrix.
+
+In general commercial transactions, remember the cardinal rule of negotiation: **reciprocity**. Any unilateral indemnity, uncapped liability, or immediate termination rights should be countered with bilateral mutuality, 30-day notice and cure periods, and trailing 12-month aggregate fee caps.
+
+*Disclaimer: This strategic analysis is powered by Lexisense AI Legal Intelligence for informational and negotiation preparation purposes only and does not constitute formal attorney-client legal representation.*`;
+    }
+
+    const topItem = curatedItems[0];
+    const clauseId = topItem?.clauseId || "Curated Covenant";
+    const category = topItem?.category || "Commercial Terms";
+    const priority = topItem?.priority || "High Priority";
+    const clientNote = topItem?.clientNotes || topItem?.customNote || "";
+
+    let strategyContent = "";
+
+    if (queryLower.includes("leverage") || queryLower.includes("trade-off") || queryLower.includes("tradeoff")) {
+      strategyContent = `### 1. Strategic Leverage & Trade-Off Matrix
+Across your **${curatedItems.length} curated provisions**, your primary exposure point centers on **${clauseId} (${category})** designated as **${priority}**.
+
+- **Primary Stand-Firm Anchor**: Stand firm on demanding mutual reciprocity and a hard dollar or 12-month trailing fee ceiling on **${clauseId}**. Do not budge on uncapped consequential exposure.
+- **Tactical Concession Opportunity**: If the counterparty pushes back vigorously, offer them a narrowly tailored carve-out strictly limited to willful misconduct or breach of confidentiality, rather than uncapped general performance exposure.
+- **Cross-Clause Leverage**: Use any concessions made in secondary clauses (such as accepting standard payment net-30 terms) as direct trade-off justification for mutualizing **${clauseId}**.`;
+    } else if (queryLower.includes("counter") || queryLower.includes("draft") || queryLower.includes("proposal") || queryLower.includes("redline") || queryLower.includes("email")) {
+      strategyContent = `### 1. Tactical Counter-Proposal Formulation
+To address **${clauseId} (${category})**, here is balanced compromise language modeled after standard ABA and Delaware commercial boilerplate:
+
+> **Recommended Reciprocal Compromise Boilerplate:**
+> *"Except for breaches of Section [Confidentiality], gross negligence, or third-party indemnification obligations, neither party's total aggregate liability arising out of or related to this Agreement shall exceed the total fees paid or payable by Customer in the twelve (12) months immediately preceding the claim. In no event shall either party be liable for indirect, incidental, or consequential damages (including loss of revenue or profits)."*
+
+### 2. Commercial Justification Script for Counterparty
+- **Bilateral Fairness**: Caps both parties symmetrically rather than creating a one-sided risk sink.
+- **Commercial Insurability**: Uncapped general liabilities cannot be economically underwritten by enterprise insurers; standard E&O and cyber policies align with trailing 12-month contract multiples.`;
+    } else if (queryLower.includes("walk") || queryLower.includes("threshold") || queryLower.includes("red flag") || queryLower.includes("risk")) {
+      strategyContent = `### 1. Critical Walk-Away Thresholds
+For **${clauseId}** (evaluated at **${topItem?.riskLevel || "CRITICAL"} Risk**):
+
+- **Absolute Red Line**: Do **not** accept unilateral uncapped liability or nominal token caps ($50 or $100 limits for enterprise services).
+- **Secondary Threshold**: Reject any indemnification clause that allows direct intra-party contractual breach claims rather than strictly defending against third-party claims.
+- **Default Trigger**: Ensure a mandatory **30-day written notice and cure period** exists before either party can declare an event of default or terminate for cause.`;
+    } else {
+      strategyContent = `### 1. Strategic Assessment for ${clauseId} (${category})
+Based on your designated priority (**${priority}**) ${clientNote ? `and client note (*"${clientNote}"*)` : ""}:
+
+- **Core Risk**: The current instrument is heavily weighted in favor of the counterparty, shifting operational burden and speculative liabilities onto your organization.
+- **Market Alignment**: Standard enterprise market practice (NVCA / ABA Model Terms) favors reciprocal covenants, a consequential damages waiver, and an aggregate fee ceiling tied to contract value.
+- **Immediate Recommendation**: Counter-propose our balanced reciprocal redline. If the vendor claims this is their "standard non-negotiable form," request an escalation to their commercial legal counsel—business reps frequently have authority to approve reciprocal caps.`;
+    }
+
+    return `${strategyContent}
+
+### 2. High-Impact Questions for Your Legal Counsel
+When you consult your attorney, present these precise questions regarding your curated dossier:
+1. *"For **${clauseId}**, will our commercial general liability and errors & omissions insurance cover the un-waived liabilities under current state governing law?"*
+2. *"Can we negotiate a separate 2x super-cap solely for data privacy incidents while maintaining a 1x trailing fee cap for general breach?"*
+3. *"Does the current dispute resolution forum create unfavorable procedural burdens for us if we enforce cure remedies?"*
+
+*Disclaimer: This strategic analysis is powered by Lexisense AI Legal Intelligence for informational and negotiation preparation purposes only and does not constitute formal attorney-client legal representation or formal legal advice.*`;
+  }
 
   // Vite integration
   if (process.env.NODE_ENV !== "production") {

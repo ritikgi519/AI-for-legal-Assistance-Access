@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { LexisenseAnalysisResult, SearchResultItem } from '../types';
 import { performSemanticSearch } from '../utils/semanticSearch';
+import { useDebounce } from '../hooks/useDebounce';
 
 interface GlobalSearchBarProps {
   analysis: LexisenseAnalysisResult | null;
@@ -27,6 +28,7 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
   onSelectResult
 }) => {
   const [query, setQuery] = useState<string>('');
+  const debouncedQuery = useDebounce(query, 120);
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [activeTypeFilter, setActiveTypeFilter] = useState<'ALL' | 'CLAUSE' | 'STRESS_TEST' | 'TIMELINE_MILESTONE'>('ALL');
@@ -34,10 +36,10 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Compute search results
+  // Compute search results with debounced query
   const rawResults = useMemo(() => {
-    return performSemanticSearch(query, analysis, documentText);
-  }, [query, analysis, documentText]);
+    return performSemanticSearch(debouncedQuery, analysis, documentText);
+  }, [debouncedQuery, analysis, documentText]);
 
   // Filter results by type chip
   const filteredResults = useMemo(() => {
@@ -138,6 +140,11 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
         <input
           ref={inputRef}
           type="text"
+          role="combobox"
+          aria-expanded={isOpen}
+          aria-autocomplete="list"
+          aria-controls="global-search-results"
+          aria-label="Global semantic search across legal concepts and clauses"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -145,7 +152,7 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
           }}
           onFocus={() => setIsOpen(true)}
           onKeyDown={handleInputKeyDown}
-          placeholder="Search clauses, topics, or risks (e.g. 'liability', 'indemnity', 'payment')..."
+          placeholder="Search legal concepts (e.g. 'liability', 'indemnity', 'termination', 'ip')..."
           className="w-full pl-9 pr-14 py-1.5 bg-slate-950/80 hover:bg-slate-950 focus:bg-slate-950 text-slate-200 placeholder-slate-500 text-xs rounded-lg border border-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition focus:outline-none"
         />
 
@@ -171,9 +178,55 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
         </div>
       </div>
 
+      {/* Dropdown: Quick Legal Concept Suggestions when empty/focused */}
+      {isOpen && query.trim().length < 2 && (
+        <div className="absolute left-0 right-0 top-full mt-2 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-50 overflow-hidden p-3 space-y-2.5">
+          <div className="flex items-center justify-between text-[11px] text-slate-400">
+            <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              Query Specific Legal Concepts
+            </span>
+            <span className="text-[10px] font-mono text-slate-500">1-click audit</span>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { label: 'Limitation of Liability', query: 'liability', icon: '⚖️' },
+              { label: 'Indemnification & Defense', query: 'indemnity', icon: '🛡️' },
+              { label: 'Termination & Cure', query: 'termination', icon: '⏱️' },
+              { label: 'Payment Penalties', query: 'payment', icon: '💳' },
+              { label: 'IP Rights & Ownership', query: 'intellectual property', icon: '💡' },
+              { label: 'Confidentiality & Data', query: 'confidentiality', icon: '🔒' },
+              { label: 'Governing Law & Venue', query: 'governing law', icon: '🌐' },
+              { label: 'SLA & Uptime Credits', query: 'sla', icon: '⚡' },
+              { label: 'D3 Risk Radar', query: 'radar', icon: '🎯' }
+            ].map(concept => (
+              <button
+                key={concept.query}
+                type="button"
+                onClick={() => {
+                  setQuery(concept.query);
+                  setIsOpen(true);
+                  inputRef.current?.focus();
+                }}
+                className="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-amber-500/10 hover:border-amber-500/40 text-slate-300 hover:text-amber-300 border border-slate-800 text-[11px] font-medium transition cursor-pointer flex items-center gap-1.5"
+              >
+                <span>{concept.icon}</span>
+                <span>{concept.label}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="pt-1.5 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-500">
+            <span>Click any legal topic to jump straight to corresponding covenants</span>
+            <kbd className="font-mono bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 text-slate-400">esc to close</kbd>
+          </div>
+        </div>
+      )}
+
       {/* Dropdown Results Palette */}
       {isOpen && query.trim().length >= 2 && (
-        <div className="absolute left-0 right-0 top-full mt-2 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-50 overflow-hidden max-h-[440px] flex flex-col">
+        <div id="global-search-results" className="absolute left-0 right-0 top-full mt-2 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-50 overflow-hidden max-h-[440px] flex flex-col">
           {/* Palette Sub-header & Filters */}
           <div className="p-2.5 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between text-[11px]">
             <div className="flex items-center gap-1 text-slate-400">
@@ -276,12 +329,15 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
                       </p>
                     </div>
 
-                    <div className="shrink-0 pt-1 text-slate-500">
-                      {isSelected ? (
-                        <CornerDownLeft className="w-3.5 h-3.5 text-amber-400" />
-                      ) : (
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      )}
+                    <div className="shrink-0 pt-1 flex flex-col items-end gap-1">
+                      <span className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md border flex items-center gap-1 transition ${
+                        isSelected 
+                          ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold shadow-sm' 
+                          : 'bg-slate-950/80 text-amber-300 border-amber-500/30'
+                      }`}>
+                        <span>{item.clauseId ? 'Jump to Clause' : 'Jump to View'}</span>
+                        <CornerDownLeft className="w-3 h-3" />
+                      </span>
                     </div>
                   </div>
                 );

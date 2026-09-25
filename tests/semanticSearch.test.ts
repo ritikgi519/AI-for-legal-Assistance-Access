@@ -52,4 +52,28 @@ describe('Global Semantic Search Engine', () => {
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].title).toContain('Section 8');
   });
+
+  it('queries specific legal concepts and returns results with clauseId for direct navigation', () => {
+    const legalConceptQueries = ['intellectual property', 'payment', 'confidentiality', 'audit'];
+    
+    for (const query of legalConceptQueries) {
+      const results = performSemanticSearch(query, analysis, docText);
+      expect(results.length).toBeGreaterThan(0);
+
+      // Verify at least one result has a clauseId or targetTab for clickable jump
+      const jumpableResult = results.find(r => r.clauseId || r.targetTab);
+      expect(jumpableResult).toBeDefined();
+      expect(jumpableResult?.targetTab).toBeDefined();
+    }
+  });
+
+  it('clause search results provide clauseId and excerpt for direct jumping', () => {
+    const results = performSemanticSearch('liability', analysis, docText);
+    const clauseResult = results.find(r => r.type === 'CLAUSE');
+    
+    expect(clauseResult).toBeDefined();
+    expect(clauseResult?.clauseId).toBeDefined();
+    expect(clauseResult?.clauseId?.length).toBeGreaterThan(0);
+    expect(clauseResult?.excerpt).toBeDefined();
+  });
 });

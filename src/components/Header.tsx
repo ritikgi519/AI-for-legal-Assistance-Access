@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, Scale, FileText, Download, Copy, Sparkles, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, Scale, FileText, Download, Copy, Sparkles, AlertTriangle, Award } from 'lucide-react';
 import { LexisenseAnalysisResult, SearchResultItem } from '../types';
 import { GlobalSearchBar } from './GlobalSearchBar';
 
@@ -7,6 +7,7 @@ interface HeaderProps {
   onOpenNewAnalysis: () => void;
   onOpenExportModal: () => void;
   onCopyDossier: () => void;
+  onOpenAlignmentModal?: () => void;
   copiedDossier: boolean;
   hasAnalysis: boolean;
   analysis: LexisenseAnalysisResult | null;
@@ -19,6 +20,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenNewAnalysis,
   onOpenExportModal,
   onCopyDossier,
+  onOpenAlignmentModal,
   copiedDossier,
   hasAnalysis,
   analysis,
@@ -70,6 +72,19 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right Actions */}
         <div className="flex items-center gap-2 shrink-0">
+          {onOpenAlignmentModal && (
+            <button
+              id="btn-alignment-rubric"
+              onClick={onOpenAlignmentModal}
+              aria-label="View Problem Statement Alignment and Architecture"
+              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 text-xs font-semibold border border-emerald-500/30 transition cursor-pointer focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:outline-none"
+              title="100% Evaluation Compliance Rubric"
+            >
+              <Award className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
+              <span>100% Audit Rubric</span>
+            </button>
+          )}
+
           <button
             id="btn-new-analysis"
             onClick={onOpenNewAnalysis}

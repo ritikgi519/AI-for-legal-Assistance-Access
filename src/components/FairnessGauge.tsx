@@ -12,16 +12,18 @@ import {
   ChevronDown,
   ChevronUp,
   Scale,
-  ArrowDownRight
+  ArrowDownRight,
+  Radar
 } from 'lucide-react';
 
 interface FairnessGaugeProps {
   overview: DocumentOverview;
   clauses: CriticalClauseAudit[];
   onSelectCategory?: (category: string) => void;
+  onOpenRiskRadar?: () => void;
 }
 
-export const FairnessGauge: React.FC<FairnessGaugeProps> = ({ overview, clauses }) => {
+export const FairnessGauge: React.FC<FairnessGaugeProps> = ({ overview, clauses, onOpenRiskRadar }) => {
   const [showLedger, setShowLedger] = useState(false);
   const score = Math.max(0, Math.min(100, overview.fairness_index));
 
@@ -148,18 +150,31 @@ export const FairnessGauge: React.FC<FairnessGaugeProps> = ({ overview, clauses 
             </div>
           </div>
 
-          {/* Scoring Ledger Toggle Button */}
-          <button
-            id="btn-dfi-ledger-toggle"
-            onClick={() => setShowLedger(!showLedger)}
-            aria-expanded={showLedger}
-            aria-controls="dfi-ledger-panel"
-            className="mt-3 text-xs text-amber-400/90 hover:text-amber-300 flex items-center gap-1.5 font-medium transition cursor-pointer"
-          >
-            <Calculator className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>{showLedger ? 'Hide Calculation Ledger' : 'View DFI Scoring Ledger'}</span>
-            {showLedger ? <ChevronUp className="w-3 h-3" aria-hidden="true" /> : <ChevronDown className="w-3 h-3" aria-hidden="true" />}
-          </button>
+          {/* Action Buttons */}
+          <div className="flex flex-wrap items-center gap-2 mt-3">
+            <button
+              id="btn-dfi-ledger-toggle"
+              onClick={() => setShowLedger(!showLedger)}
+              aria-expanded={showLedger}
+              aria-controls="dfi-ledger-panel"
+              className="text-xs text-amber-400/90 hover:text-amber-300 flex items-center gap-1.5 font-medium transition cursor-pointer"
+            >
+              <Calculator className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>{showLedger ? 'Hide Calculation Ledger' : 'View DFI Scoring Ledger'}</span>
+              {showLedger ? <ChevronUp className="w-3 h-3" aria-hidden="true" /> : <ChevronDown className="w-3 h-3" aria-hidden="true" />}
+            </button>
+
+            {onOpenRiskRadar && (
+              <button
+                type="button"
+                onClick={onOpenRiskRadar}
+                className="text-xs text-slate-400 hover:text-amber-300 flex items-center gap-1.5 font-medium transition cursor-pointer border-l border-slate-800 pl-2.5"
+              >
+                <Radar className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />
+                <span>Open Risk Radar</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Right: Document Meta & Executive Summary */}

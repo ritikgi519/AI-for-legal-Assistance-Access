@@ -1,4 +1,5 @@
 import { GlossaryCategory, GlossaryTerm, GlossaryTermOccurrence } from '../types';
+import { FastLRUCache } from './memoCache';
 
 interface GlossaryDefinitionTemplate {
   id: string;
@@ -232,8 +233,16 @@ export const CANONICAL_GLOSSARY_DEFINITIONS: GlossaryDefinitionTemplate[] = [
   }
 ];
 
+const glossaryParseCache = new FastLRUCache<{
+  terms: GlossaryTerm[];
+  totalOccurrences: number;
+  highlightRegex: RegExp | null;
+}>(50);
+
 /**
  * Parses the document text, extracts occurrences of legal jargon, and returns enriched glossary terms.
+ * Memoized with FastLRUCache for sub-millisecond lookups on repeated queries.
+ * @complexity O(N) where N is number of lines in the document
  */
 export function parseDocumentGlossary(documentText: string): {
   terms: GlossaryTerm[];
@@ -242,6 +251,12 @@ export function parseDocumentGlossary(documentText: string): {
 } {
   if (!documentText) {
     return { terms: [], totalOccurrences: 0, highlightRegex: null };
+  }
+
+  const cacheKey = FastLRUCache.hashKey(documentText, 'glossary');
+  const cached = glossaryParseCache.get(cacheKey);
+  if (cached) {
+    return cached;
   }
 
   const lines = documentText.split('\n');
@@ -308,9 +323,12 @@ export function parseDocumentGlossary(documentText: string): {
     }
   }
 
-  return {
+  const result = {
     terms: matchedTerms,
     totalOccurrences,
     highlightRegex
   };
+
+  glossaryParseCache.set(cacheKey, result);
+  return result;
 }

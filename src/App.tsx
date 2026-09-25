@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { SAMPLE_CONTRACTS } from './data/sampleContracts';
 import { LexisenseAnalysisResult, SampleContract, SearchResultItem } from './types';
 import { Header } from './components/Header';
@@ -17,6 +17,21 @@ import { SourceViewerModal } from './components/SourceViewerModal';
 import { SplitViewAuditor } from './components/SplitViewAuditor';
 import { ComplianceTimelineView } from './components/ComplianceTimelineView';
 import { LegalGlossaryView } from './components/LegalGlossaryView';
+import { AlignmentRubricModal } from './components/AlignmentRubricModal';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { RiskRadarView } from './components/RiskRadarView';
+import { CuratedDossierSidebar } from './components/CuratedDossierSidebar';
+import { 
+  PinnedDossierItem, 
+  DossierPriority, 
+  loadPinnedDossier, 
+  savePinnedDossier, 
+  togglePinClause, 
+  updatePinnedItemNote, 
+  updatePinnedItemPriority, 
+  removePinnedItem 
+} from './utils/pinnedDossierTracker';
+import { CriticalClauseAudit } from './types';
 import { 
   FileCheck, 
   Zap, 
@@ -33,7 +48,9 @@ import {
   Split,
   Crosshair,
   Calendar,
-  BookOpen
+  BookOpen,
+  Radar,
+  Pin
 } from 'lucide-react';
 
 export default function App() {
@@ -45,27 +62,36 @@ export default function App() {
   const [selectedSampleId, setSelectedSampleId] = useState<string>(defaultSample.id);
 
   // Modals & UI states
-  const [activeTab, setActiveTab] = useState<'split' | 'clauses' | 'stress' | 'dossier' | 'timeline' | 'glossary'>('split');
+  const [activeTab, setActiveTab] = useState<'split' | 'clauses' | 'radar' | 'stress' | 'dossier' | 'timeline' | 'glossary'>('split');
+  const [focusedClauseId, setFocusedClauseId] = useState<string | null>(null);
   const [isDocModalOpen, setIsDocModalOpen] = useState<boolean>(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
   const [isSourceModalOpen, setIsSourceModalOpen] = useState<boolean>(false);
+  const [isAlignmentModalOpen, setIsAlignmentModalOpen] = useState<boolean>(false);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [copiedDossier, setCopiedDossier] = useState<boolean>(false);
 
+  // Curated consultation dossier state & sidebar visibility
+  const [pinnedDossier, setPinnedDossier] = useState<Record<string, PinnedDossierItem>>(() =>
+    loadPinnedDossier(defaultSample.title)
+  );
+  const [isDossierSidebarOpen, setIsDossierSidebarOpen] = useState<boolean>(false);
+
   // Handle selecting one of the pre-loaded benchmark contracts
-  const handleSelectSample = (sample: SampleContract) => {
+  const handleSelectSample = useCallback((sample: SampleContract) => {
     setSelectedSampleId(sample.id);
     setCurrentDocumentText(sample.content);
     setCurrentDocTitle(sample.title);
     if (sample.presetAnalysis) {
       setAnalysis(sample.presetAnalysis);
     }
+    setPinnedDossier(loadPinnedDossier(sample.title));
     setAnalysisError(null);
-  };
+  }, []);
 
   // Handle analyzing custom text via Gemini backend
-  const handleAnalyzeDocument = async (text: string, title: string, perspective: string) => {
+  const handleAnalyzeDocument = useCallback(async (text: string, title: string, perspective: string) => {
     setIsAnalyzing(true);
     setAnalysisError(null);
 
@@ -85,22 +111,63 @@ export default function App() {
       }
 
       const result: LexisenseAnalysisResult = await response.json();
+      const docTitleToUse = title || result.document_overview.document_title;
       setAnalysis(result);
       setCurrentDocumentText(text);
-      setCurrentDocTitle(title || result.document_overview.document_title);
+      setCurrentDocTitle(docTitleToUse);
+      setPinnedDossier(loadPinnedDossier(docTitleToUse));
       setSelectedSampleId('');
       setIsDocModalOpen(false);
       setActiveTab('clauses');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Lexisense Analysis Failure:', err);
-      setAnalysisError(err.message || 'Failed to complete document deconstruction.');
+      const errMsg = err instanceof Error ? err.message : 'Failed to complete document deconstruction.';
+      setAnalysisError(errMsg);
     } finally {
       setIsAnalyzing(false);
     }
-  };
+  }, []);
+
+  // Curated dossier handlers
+  const handleTogglePin = useCallback((clause: CriticalClauseAudit) => {
+    setPinnedDossier(prev => {
+      const { updated } = togglePinClause(prev, clause);
+      savePinnedDossier(currentDocTitle, updated);
+      return updated;
+    });
+  }, [currentDocTitle]);
+
+  const handleUpdatePinnedNote = useCallback((clauseId: string, note: string) => {
+    setPinnedDossier(prev => {
+      const updated = updatePinnedItemNote(prev, clauseId, note);
+      savePinnedDossier(currentDocTitle, updated);
+      return updated;
+    });
+  }, [currentDocTitle]);
+
+  const handleUpdatePinnedPriority = useCallback((clauseId: string, priority: DossierPriority) => {
+    setPinnedDossier(prev => {
+      const updated = updatePinnedItemPriority(prev, clauseId, priority);
+      savePinnedDossier(currentDocTitle, updated);
+      return updated;
+    });
+  }, [currentDocTitle]);
+
+  const handleRemovePinnedItem = useCallback((clauseId: string) => {
+    setPinnedDossier(prev => {
+      const updated = removePinnedItem(prev, clauseId);
+      savePinnedDossier(currentDocTitle, updated);
+      return updated;
+    });
+  }, [currentDocTitle]);
+
+  const handleClearAllPinned = useCallback(() => {
+    setPinnedDossier({});
+    savePinnedDossier(currentDocTitle, {});
+  }, [currentDocTitle]);
 
   // Quick copy attorney briefing
-  const handleCopyDossier = () => {
+  const handleCopyDossier = useCallback(() => {
     if (!analysis) return;
     const dossier = analysis.lawyer_consultation_dossier;
     const brief = `# ATTORNEY CONSULTATION BRIEFING
@@ -123,12 +190,16 @@ ${analysis.statutory_disclaimer}
     navigator.clipboard.writeText(brief);
     setCopiedDossier(true);
     setTimeout(() => setCopiedDossier(false), 2000);
-  };
+  }, [analysis]);
 
   // Handle selecting a search result item from the global semantic search bar
-  const handleSelectSearchResult = (result: SearchResultItem) => {
-    setActiveTab(result.targetTab);
-  };
+  const handleSelectSearchResult = useCallback((result: SearchResultItem) => {
+    const destinationTab = result.targetTab || (result.clauseId ? 'clauses' : 'clauses');
+    setActiveTab(destinationTab);
+    if (result.clauseId) {
+      setFocusedClauseId(result.clauseId);
+    }
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
@@ -150,6 +221,7 @@ ${analysis.statutory_disclaimer}
         onOpenNewAnalysis={() => setIsDocModalOpen(true)}
         onOpenExportModal={() => setIsExportModalOpen(true)}
         onCopyDossier={handleCopyDossier}
+        onOpenAlignmentModal={() => setIsAlignmentModalOpen(true)}
         copiedDossier={copiedDossier}
         hasAnalysis={!!analysis}
         analysis={analysis}
@@ -197,13 +269,15 @@ ${analysis.statutory_disclaimer}
       </nav>
 
       {/* Main Content Area */}
-      <main id="main-content" tabIndex={-1} className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 focus:outline-none">
+      <ErrorBoundary fallbackTitle="Contract Audit Workspace Intercepted">
+        <main id="main-content" tabIndex={-1} className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 focus:outline-none">
         {analysis ? (
           <>
             {/* 1. Document Overview & Document Fairness Index Gauge */}
             <FairnessGauge
               overview={analysis.document_overview}
               clauses={analysis.critical_clause_audit}
+              onOpenRiskRadar={() => setActiveTab('radar')}
             />
 
             {/* 2. Interactive Navigation Tabs */}
@@ -248,6 +322,25 @@ ${analysis.statutory_disclaimer}
                 </button>
 
                 <button
+                  id="tab-radar"
+                  role="tab"
+                  aria-selected={activeTab === 'radar'}
+                  aria-controls="panel-radar"
+                  onClick={() => setActiveTab('radar')}
+                  className={`py-3 px-3 text-xs sm:text-sm font-semibold border-b-2 flex items-center gap-2 transition cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:outline-none ${
+                    activeTab === 'radar'
+                      ? 'border-amber-500 text-amber-400'
+                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Radar className="w-4 h-4 text-amber-400" aria-hidden="true" />
+                  <span>Risk Radar</span>
+                  <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-rose-950/80 text-rose-300 border border-rose-800/60 font-mono">
+                    D3 Matrix
+                  </span>
+                </button>
+
+                <button
                   id="tab-stress"
                   role="tab"
                   aria-selected={activeTab === 'stress'}
@@ -280,9 +373,15 @@ ${analysis.statutory_disclaimer}
                 >
                   <Briefcase className="w-4 h-4 text-indigo-400" aria-hidden="true" />
                   <span>Attorney Dossier</span>
-                  <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-950/80 text-indigo-300 border border-indigo-800/60">
-                    High Leverage
-                  </span>
+                  {Object.keys(pinnedDossier).length > 0 ? (
+                    <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-bold">
+                      {Object.keys(pinnedDossier).length} Curated
+                    </span>
+                  ) : (
+                    <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-950/80 text-indigo-300 border border-indigo-800/60">
+                      High Leverage
+                    </span>
+                  )}
                 </button>
 
                 <button
@@ -325,6 +424,22 @@ ${analysis.statutory_disclaimer}
               </nav>
 
               <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400">
+                <button
+                  id="btn-nav-curated-dossier"
+                  type="button"
+                  onClick={() => setIsDossierSidebarOpen(true)}
+                  aria-label={`Open curated consultation dossier with ${Object.keys(pinnedDossier).length} pinned clauses`}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border ${
+                    Object.keys(pinnedDossier).length > 0
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 hover:bg-amber-500/30'
+                      : 'bg-slate-800/80 hover:bg-slate-750 text-slate-400 hover:text-slate-200 border-slate-700'
+                  }`}
+                  title="View your curated consultation clauses"
+                >
+                  <Pin className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Curated Dossier ({Object.keys(pinnedDossier).length})</span>
+                </button>
+
                 <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400/90 font-mono">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
                   100% Verbatim Ground Truth Active
@@ -340,6 +455,9 @@ ${analysis.statutory_disclaimer}
                     documentText={currentDocumentText}
                     clauses={analysis.critical_clause_audit}
                     documentTitle={analysis.document_overview.document_title || currentDocTitle}
+                    focusedClauseId={focusedClauseId}
+                    pinnedItems={pinnedDossier}
+                    onTogglePin={handleTogglePin}
                   />
                 </section>
               )}
@@ -349,7 +467,25 @@ ${analysis.statutory_disclaimer}
                   <ClauseAuditList
                     clauses={analysis.critical_clause_audit}
                     documentText={currentDocumentText}
+                    documentTitle={analysis.document_overview.document_title || currentDocTitle}
+                    focusedClauseId={focusedClauseId}
+                    pinnedItems={pinnedDossier}
+                    onTogglePin={handleTogglePin}
+                    onOpenCuratedSidebar={() => setIsDossierSidebarOpen(true)}
                     onLocateInSource={(_clauseId) => {
+                      setFocusedClauseId(_clauseId);
+                      setActiveTab('split');
+                    }}
+                  />
+                </section>
+              )}
+
+              {activeTab === 'radar' && (
+                <section role="tabpanel" id="panel-radar" aria-labelledby="tab-radar" tabIndex={0} className="focus:outline-none">
+                  <RiskRadarView
+                    clauses={analysis.critical_clause_audit}
+                    docTitle={analysis.document_overview.document_title || currentDocTitle}
+                    onNavigateToClause={(_clauseId) => {
                       setActiveTab('split');
                     }}
                   />
@@ -372,6 +508,16 @@ ${analysis.statutory_disclaimer}
                     docTitle={analysis.document_overview.document_title}
                     fairnessIndex={analysis.document_overview.fairness_index}
                     disclaimer={analysis.statutory_disclaimer}
+                    partyFavored={analysis.document_overview.parties_identified?.[1] || analysis.critical_clause_audit?.[0]?.party_favored || 'Counterparty'}
+                    pinnedItems={pinnedDossier}
+                    onUpdateNote={handleUpdatePinnedNote}
+                    onUpdatePriority={handleUpdatePinnedPriority}
+                    onRemoveItem={handleRemovePinnedItem}
+                    onNavigateToClause={(clauseId) => {
+                      setFocusedClauseId(clauseId);
+                      setActiveTab('clauses');
+                    }}
+                    onOpenSidebar={() => setIsDossierSidebarOpen(true)}
                   />
                 </section>
               )}
@@ -424,7 +570,8 @@ ${analysis.statutory_disclaimer}
             </button>
           </div>
         )}
-      </main>
+        </main>
+      </ErrorBoundary>
 
       {/* Footer */}
       <footer role="contentinfo" className="border-t border-slate-800/80 bg-slate-950 py-4 px-4 sm:px-6 lg:px-8 text-center text-xs text-slate-400">
@@ -460,6 +607,46 @@ ${analysis.statutory_disclaimer}
         onClose={() => setIsSourceModalOpen(false)}
         title={currentDocTitle}
         content={currentDocumentText}
+      />
+
+      <AlignmentRubricModal
+        isOpen={isAlignmentModalOpen}
+        onClose={() => setIsAlignmentModalOpen(false)}
+      />
+
+      {/* Floating Curated Consultation Dossier Trigger Button */}
+      {Object.keys(pinnedDossier).length > 0 && (
+        <button
+          id="fab-curated-dossier"
+          type="button"
+          onClick={() => setIsDossierSidebarOpen(true)}
+          aria-label={`Open curated consultation dossier with ${Object.keys(pinnedDossier).length} pinned clauses`}
+          className="fixed bottom-6 right-6 z-40 px-4 py-2.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-2xl border border-indigo-400/50 flex items-center gap-2 transition cursor-pointer hover:scale-105 active:scale-95 group"
+        >
+          <Pin className="w-4 h-4 text-amber-300 group-hover:rotate-12 transition-transform" />
+          <span>Curated Dossier</span>
+          <span className="w-5 h-5 rounded-full bg-black/40 text-amber-300 font-mono text-[11px] font-bold flex items-center justify-center">
+            {Object.keys(pinnedDossier).length}
+          </span>
+        </button>
+      )}
+
+      {/* Curated Dossier Slide-out Sidebar Drawer */}
+      <CuratedDossierSidebar
+        isOpen={isDossierSidebarOpen}
+        onClose={() => setIsDossierSidebarOpen(false)}
+        pinnedItems={pinnedDossier}
+        docTitle={analysis?.document_overview.document_title || currentDocTitle}
+        dfiScore={analysis?.document_overview.fairness_index || 50}
+        onUpdateNote={handleUpdatePinnedNote}
+        onUpdatePriority={handleUpdatePinnedPriority}
+        onRemoveItem={handleRemovePinnedItem}
+        onClearAll={handleClearAllPinned}
+        onNavigateToClause={(clauseId) => {
+          setFocusedClauseId(clauseId);
+          setActiveTab('clauses');
+        }}
+        onOpenFullDossierTab={() => setActiveTab('dossier')}
       />
     </div>
   );

@@ -1,4 +1,5 @@
 import { ComplianceMilestone, ComplianceTimelineData, CriticalClauseAudit } from '../types';
+import { FastLRUCache } from './memoCache';
 
 /**
  * Helper to convert word numbers like "thirty-six", "fifteen", "one hundred twenty" into integers
@@ -29,13 +30,23 @@ function parseWordNumber(text: string): number | null {
   return total > 0 ? total : null;
 }
 
+const timelineCache = new FastLRUCache<ComplianceTimelineData>(40);
+
 /**
- * Extracts compliance dates, deadlines, and renewal milestones from contract text and clause audits
+ * Extracts compliance dates, deadlines, and renewal milestones from contract text and clause audits.
+ * Memoized with FastLRUCache for O(1) instantaneous access.
+ * @complexity O(N) on initial run, O(1) on cache hit
  */
 export function extractComplianceTimeline(
   documentText: string,
   clauses: CriticalClauseAudit[] = []
 ): ComplianceTimelineData {
+  const cacheKey = `${FastLRUCache.hashKey(documentText, 'timeline')}:${clauses.length}`;
+  const cached = timelineCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   const milestones: ComplianceMilestone[] = [];
 
   // 1. Detect Effective Date
@@ -211,13 +222,16 @@ export function extractComplianceTimeline(
   // Sort milestones chronologically by relative offset days
   milestones.sort((a, b) => a.relativeOffsetDays - b.relativeOffsetDays);
 
-  return {
+  const result: ComplianceTimelineData = {
     effectiveDateStr,
     totalDurationDays: Math.max(totalHorizonDays, 1825),
     initialTermMonths: termMonths,
     renewalTermMonths: renewalMonths,
     milestones
   };
+
+  timelineCache.set(cacheKey, result);
+  return result;
 }
 
 /**
